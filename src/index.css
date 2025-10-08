@@ -1,0 +1,257 @@
+@import url('https://fonts.googleapis.com/css2?family=Fortalesia+Script&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 98%;
+
+    --card: 0 0% 8%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 0 0% 8%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 22 100% 50%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 22 100% 60%;
+
+    --secondary: 22 100% 40%;
+    --secondary-foreground: 0 0% 100%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 43 96% 56%;
+    --warning-foreground: 0 0% 100%;
+
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 65%;
+
+    --accent: 22 100% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 22 100% 50%;
+
+    --radius: 1rem;
+
+    --sidebar-background: 0 0% 5%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 22 100% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 12%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 0 0% 15%;
+    --sidebar-ring: 22 100% 50%;
+
+    --gradient-primary: linear-gradient(135deg, hsl(22 100% 50%), hsl(22 100% 40%));
+    --gradient-success: linear-gradient(135deg, hsl(142 76% 36%), hsl(142 76% 46%));
+    --gradient-card: linear-gradient(145deg, hsl(0 0% 8%), hsl(0 0% 5%));
+    --gradient-accent: linear-gradient(135deg, hsl(22 100% 40%), hsl(22 100% 50%));
+    
+    --shadow-glow: 0 0 30px hsl(22 100% 50% / 0.5);
+    --shadow-card: 0 10px 40px hsl(0 0% 0% / 0.6);
+    --shadow-soft: 0 4px 20px hsl(0 0% 0% / 0.7);
+    
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: 'cv11', 'ss01';
+    font-optical-sizing: auto;
+  }
+  
+  .gradient-primary {
+    background: var(--gradient-primary);
+  }
+  
+  .gradient-success {
+    background: var(--gradient-success);
+  }
+  
+  .gradient-card {
+    background: var(--gradient-card);
+  }
+  
+  .gradient-accent {
+    background: var(--gradient-accent);
+  }
+  
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
+  }
+  
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+  
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+  
+  .glass {
+    background: rgba(20, 20, 20, 0.6);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 92, 0, 0.2);
+  }
+  
+  .card-hover {
+    transition: var(--transition-smooth);
+  }
+  
+  .card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-glow);
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-in-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-glow-pulse {
+    animation: glowPulse 2s ease-in-out infinite alternate;
+  }
+
+  @keyframes glowPulse {
+    from {
+      filter: drop-shadow(0 0 10px hsl(22 100% 50% / 0.5));
+    }
+    to {
+      filter: drop-shadow(0 0 20px hsl(22 100% 50% / 0.8));
+    }
+  }
+
+  .animate-float-slow {
+    animation: floatSlow 8s ease-in-out infinite;
+  }
+
+  .animate-float-reverse {
+    animation: floatReverse 10s ease-in-out infinite;
+  }
+
+  .animate-float-center {
+    animation: floatCenter 12s ease-in-out infinite;
+  }
+
+  @keyframes floatSlow {
+    0%, 100% {
+      transform: translate(0, 0) scale(1);
+    }
+    25% {
+      transform: translate(20px, -30px) scale(1.1);
+    }
+    50% {
+      transform: translate(-15px, 20px) scale(0.9);
+    }
+    75% {
+      transform: translate(30px, 10px) scale(1.05);
+    }
+  }
+
+  @keyframes floatReverse {
+    0%, 100% {
+      transform: translate(0, 0) scale(1);
+    }
+    25% {
+      transform: translate(-25px, 25px) scale(0.95);
+    }
+    50% {
+      transform: translate(15px, -20px) scale(1.1);
+    }
+    75% {
+      transform: translate(-20px, -15px) scale(0.9);
+    }
+  }
+
+  @keyframes floatCenter {
+    0%, 100% {
+      transform: translate(-50%, -50%) scale(1) rotate(0deg);
+    }
+    25% {
+      transform: translate(-50%, -50%) scale(1.2) rotate(90deg);
+    }
+    50% {
+      transform: translate(-50%, -50%) scale(0.8) rotate(180deg);
+    }
+    75% {
+      transform: translate(-50%, -50%) scale(1.1) rotate(270deg);
+    }
+  }
+
+  .font-fortalesia {
+    font-family: 'Fortalesia Script', cursive;
+  }
+
+  /* Acessibilidade */
+  .focus-visible {
+    @apply ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Placeholders para listas vazias */
+  .empty-state {
+    @apply text-center py-12 text-muted-foreground;
+  }
+
+  /* Melhorias de contraste para badges */
+  .badge-success {
+    @apply bg-success text-success-foreground;
+  }
+
+  .badge-destructive {
+    @apply bg-destructive text-destructive-foreground;
+  }
+
+  .badge-warning {
+    @apply bg-warning text-warning-foreground;
+  }
+
+  /* Classes de texto para cores condicionais */
+  .text-success {
+    color: hsl(var(--success));
+  }
+
+  .text-destructive {
+    color: hsl(var(--destructive));
+  }
+
+  /* Responsividade melhorada */
+  @media (max-width: 768px) {
+    .mobile-stack {
+      @apply flex-col space-y-4;
+    }
+    
+    .mobile-full {
+      @apply w-full;
+    }
+  }
+}
