@@ -123,14 +123,14 @@ const MonthlyCalendar = () => {
                 key={day}
                 onClick={() => handleDayClick(day)}
                 className={`
-                  min-h-[80px] p-3 rounded-lg border transition-all hover:shadow-md relative
+                  min-h-[80px] p-3 rounded-lg border transition-all hover:shadow-md relative group
                   ${isToday ? 'border-primary border-2' : 'border-border'}
                   ${isPast && summary ? 'bg-muted/50' : 'bg-card'}
                   hover:bg-accent
                 `}
               >
                 {/* Número do dia no canto superior direito */}
-                <div className="absolute top-2 right-2 text-lg font-bold text-primary">{day}</div>
+                <div className="absolute top-2 right-2 text-lg font-bold text-primary group-hover:text-black transition-colors duration-200">{day}</div>
                 
                 {/* Conteúdo do lucro/prejuízo no centro */}
                 {summary && (

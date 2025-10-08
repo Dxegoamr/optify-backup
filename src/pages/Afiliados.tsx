@@ -44,7 +44,7 @@ const Afiliados = () => {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <Card className="p-6 shadow-card">
+          <Card className="p-6 shadow-card hover:shadow-glow transition-all duration-300">
             <div className="flex items-start justify-between mb-4">
               <p className="text-sm text-muted-foreground">Total de Indicações</p>
               <div className="p-2 bg-primary/10 rounded-lg">
@@ -54,7 +54,7 @@ const Afiliados = () => {
             <p className="text-3xl font-bold">{mockStats.totalReferrals}</p>
           </Card>
 
-          <Card className="p-6 shadow-card">
+          <Card className="p-6 shadow-card hover:shadow-glow transition-all duration-300">
             <div className="flex items-start justify-between mb-4">
               <p className="text-sm text-muted-foreground">Indicações Ativas</p>
               <div className="p-2 bg-success/10 rounded-lg">
@@ -64,7 +64,7 @@ const Afiliados = () => {
             <p className="text-3xl font-bold text-success">{mockStats.activeReferrals}</p>
           </Card>
 
-          <Card className="p-6 shadow-card">
+          <Card className="p-6 shadow-card hover:shadow-glow transition-all duration-300">
             <div className="flex items-start justify-between mb-4">
               <p className="text-sm text-muted-foreground">Total Ganho</p>
               <div className="p-2 bg-primary/10 rounded-lg">
@@ -74,7 +74,7 @@ const Afiliados = () => {
             <p className="text-3xl font-bold">R$ {mockStats.totalEarnings}</p>
           </Card>
 
-          <Card className="p-6 shadow-card">
+          <Card className="p-6 shadow-card hover:shadow-glow transition-all duration-300">
             <div className="flex items-start justify-between mb-4">
               <p className="text-sm text-muted-foreground">A Receber</p>
               <div className="p-2 bg-warning/10 rounded-lg">

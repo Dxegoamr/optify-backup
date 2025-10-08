@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { TrendingUp, TrendingDown, Calendar as CalendarIcon, ArrowUp, ArrowDown, Target, Trophy, Lock } from 'lucide-react';
+import { TrendingUp, TrendingDown, Calendar as CalendarIcon, ArrowUp, ArrowDown, Target, Trophy, Lock, Filter, X } from 'lucide-react';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
 import { useEmployees, useTransactions, usePlatforms, useDeleteTransaction } from '@/hooks/useFirestore';
 import { UserDailySummaryService } from '@/core/services/user-specific.service';
@@ -14,14 +15,30 @@ import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const ResumoDia = () => {
   const { user } = useFirebaseAuth();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<string>('');
+  const [platformFilter, setPlatformFilter] = useState<string>('');
+  const [employeeFilter, setEmployeeFilter] = useState<string>('');
   
   const selectedDateString = selectedDate.toISOString().split('T')[0];
+  
+  // Processar filtro da URL
+  useEffect(() => {
+    const filter = searchParams.get('filter');
+    if (filter) {
+      setActiveFilter(filter);
+    } else {
+      setActiveFilter('');
+    }
+  }, [searchParams]);
   
   // Buscar dados do Firebase
   const { data: employees = [] } = useEmployees(user?.uid || '');
@@ -29,13 +46,47 @@ const ResumoDia = () => {
   const { data: todayTransactions = [] } = useTransactions(user?.uid || '', selectedDateString, selectedDateString);
   const deleteTransactionMutation = useDeleteTransaction();
 
+  // Filtrar transações baseado nos filtros ativos
+  const getFilteredTransactions = () => {
+    let filtered = todayTransactions;
+    
+    // Filtro por tipo de transação
+    switch (activeFilter) {
+      case 'deposits':
+        filtered = filtered.filter((t: any) => t.type === 'deposit');
+        break;
+      case 'withdraws':
+        filtered = filtered.filter((t: any) => t.type === 'withdraw');
+        break;
+      case 'profit':
+        // Para lucro, mostrar todas as transações
+        break;
+      default:
+        break;
+    }
+    
+    // Filtro por plataforma
+    if (platformFilter) {
+      filtered = filtered.filter((t: any) => t.platformId === platformFilter);
+    }
+    
+    // Filtro por funcionário
+    if (employeeFilter) {
+      filtered = filtered.filter((t: any) => t.employeeId === employeeFilter);
+    }
+    
+    return filtered;
+  };
+
+  const filteredTransactions = getFilteredTransactions();
+
   // Calcular estatísticas do dia
   const deposits = todayTransactions.filter((t: any) => t.type === 'deposit');
   const withdraws = todayTransactions.filter((t: any) => t.type === 'withdraw');
   const totalDeposits = deposits.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
   const totalWithdraws = withdraws.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
   const profit = totalWithdraws - totalDeposits;
-  const transactionCount = todayTransactions.length;
+  const transactionCount = filteredTransactions.length;
 
   // Calcular estatísticas por plataforma
   const platformStats = platforms.map((platform: any) => {
@@ -176,7 +227,17 @@ const ResumoDia = () => {
       <div className="space-y-6 animate-fade-in">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-4xl font-bold mb-2">Resumo do Dia</h1>
+            <div className="flex items-center gap-3 mb-2">
+              <h1 className="text-4xl font-bold">Resumo do Dia</h1>
+              {activeFilter && (
+                <Badge variant="secondary" className="gap-1 bg-primary/10 text-primary border-primary/20">
+                  <Filter className="h-3 w-3" />
+                  {activeFilter === 'deposits' && 'Depósitos'}
+                  {activeFilter === 'withdraws' && 'Saques'}
+                  {activeFilter === 'profit' && 'Lucro'}
+                </Badge>
+              )}
+            </div>
             <p className="text-muted-foreground">{format(selectedDate, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: pt })}</p>
           </div>
           
@@ -229,7 +290,7 @@ const ResumoDia = () => {
 
         {/* Cards de Resumo */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="p-6 shadow-card">
+          <Card className="p-6 shadow-card hover:shadow-glow transition-all duration-300">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-2">Receita do Dia</p>
@@ -243,7 +304,7 @@ const ResumoDia = () => {
             </div>
           </Card>
 
-          <Card className="p-6 shadow-card">
+          <Card className="p-6 shadow-card hover:shadow-glow transition-all duration-300">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-2">Total de Depósitos</p>
@@ -255,7 +316,7 @@ const ResumoDia = () => {
             </div>
           </Card>
 
-          <Card className="p-6 shadow-card">
+          <Card className="p-6 shadow-card hover:shadow-glow transition-all duration-300">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-2">Total de Saques</p>
@@ -267,7 +328,7 @@ const ResumoDia = () => {
             </div>
           </Card>
 
-          <Card className="p-6 shadow-card">
+          <Card className="p-6 shadow-card hover:shadow-glow transition-all duration-300">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-2">Transações</p>
@@ -388,7 +449,156 @@ const ResumoDia = () => {
         {/* Lista de Transações do Dia */}
         <Card className="shadow-card overflow-hidden">
           <div className="p-6 border-b">
-            <h3 className="text-lg font-semibold">Transações do Dia</h3>
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold">
+                  Transações do Dia
+                  {(activeFilter || platformFilter || employeeFilter) && (
+                    <span className="text-sm text-muted-foreground ml-2">
+                      ({filteredTransactions.length} transação(ões) encontrada(s))
+                    </span>
+                  )}
+                </h3>
+              </div>
+              
+              {/* Filtros de Plataforma e Funcionário no canto superior direito */}
+              <div className="flex items-center gap-4 ml-6">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Plataforma:</span>
+                  <Select value={platformFilter || "all"} onValueChange={(value) => setPlatformFilter(value === "all" ? "" : value)}>
+                    <SelectTrigger className="w-[160px]">
+                      <SelectValue placeholder="Todas" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas as plataformas</SelectItem>
+                      {platforms.map((platform: any) => (
+                        <SelectItem key={platform.id} value={platform.id}>
+                          {platform.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Funcionário:</span>
+                  <Select value={employeeFilter || "all"} onValueChange={(value) => setEmployeeFilter(value === "all" ? "" : value)}>
+                    <SelectTrigger className="w-[160px]">
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os funcionários</SelectItem>
+                      {employees.map((employee: any) => (
+                        <SelectItem key={employee.id} value={employee.id}>
+                          {employee.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {(activeFilter || platformFilter || employeeFilter) && (
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      setActiveFilter('');
+                      setPlatformFilter('');
+                      setEmployeeFilter('');
+                      navigate('/resumo-dia');
+                    }}
+                  >
+                    Limpar Filtros
+                  </Button>
+                )}
+              </div>
+            </div>
+            
+            {/* Filtros de Transações */}
+            <div className="space-y-4 mt-4">
+              {/* Indicador de Filtros Ativos */}
+              {(activeFilter || platformFilter || employeeFilter) && (
+                <div className="flex items-center gap-2 p-3 bg-primary/10 rounded-lg border border-primary/20">
+                  <Filter className="h-4 w-4 text-primary" />
+                  <span className="text-sm text-primary font-medium">Filtros ativos:</span>
+                  <div className="flex gap-2">
+                    {activeFilter && (
+                      <Badge variant="secondary" className="bg-primary/20 text-primary border-primary/30">
+                        {activeFilter === 'deposits' && 'Depósitos'}
+                        {activeFilter === 'withdraws' && 'Saques'}
+                        {activeFilter === 'profit' && 'Lucro'}
+                      </Badge>
+                    )}
+                    {platformFilter && (
+                      <Badge variant="secondary" className="bg-primary/20 text-primary border-primary/30">
+                        Plataforma: {platforms.find((p: any) => p.id === platformFilter)?.name || 'N/A'}
+                      </Badge>
+                    )}
+                    {employeeFilter && (
+                      <Badge variant="secondary" className="bg-primary/20 text-primary border-primary/30">
+                        Funcionário: {employees.find((e: any) => e.id === employeeFilter)?.name || 'N/A'}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Filtros por Tipo */}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant={activeFilter === '' ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => navigate('/resumo-dia')}
+                  className="gap-2"
+                >
+                  <Filter className="h-3 w-3" />
+                  Todas
+                  <Badge variant="secondary" className="ml-1">
+                    {todayTransactions.length}
+                  </Badge>
+                </Button>
+                
+                <Button
+                  variant={activeFilter === 'deposits' ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => navigate('/resumo-dia?filter=deposits')}
+                  className="gap-2"
+                >
+                  <ArrowDown className="h-3 w-3" />
+                  Depósitos
+                  <Badge variant="secondary" className="ml-1">
+                    {deposits.length}
+                  </Badge>
+                </Button>
+                
+                <Button
+                  variant={activeFilter === 'withdraws' ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => navigate('/resumo-dia?filter=withdraws')}
+                  className="gap-2"
+                >
+                  <ArrowUp className="h-3 w-3" />
+                  Saques
+                  <Badge variant="secondary" className="ml-1">
+                    {withdraws.length}
+                  </Badge>
+                </Button>
+                
+                <Button
+                  variant={activeFilter === 'profit' ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => navigate('/resumo-dia?filter=profit')}
+                  className="gap-2"
+                >
+                  <TrendingUp className="h-3 w-3" />
+                  Lucro
+                  <Badge variant="secondary" className="ml-1">
+                    {todayTransactions.length}
+                  </Badge>
+                </Button>
+              </div>
+
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -402,7 +612,7 @@ const ResumoDia = () => {
                 </tr>
               </thead>
               <tbody>
-                {todayTransactions.map((transaction: any) => {
+                {filteredTransactions.map((transaction: any) => {
                   const employee = employees.find((e: any) => e.id === transaction.employeeId);
                   const platform = platforms.find((p: any) => p.id === transaction.platformId);
                   
@@ -436,6 +646,26 @@ const ResumoDia = () => {
                     </tr>
                   );
                 })}
+                {filteredTransactions.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="p-8 text-center text-muted-foreground">
+                      {activeFilter ? (
+                        <div className="space-y-2">
+                          <p>Nenhuma transação encontrada para o filtro selecionado.</p>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => navigate('/resumo-dia')}
+                          >
+                            Ver todas as transações
+                          </Button>
+                        </div>
+                      ) : (
+                        'Nenhuma transação registrada para este dia.'
+                      )}
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

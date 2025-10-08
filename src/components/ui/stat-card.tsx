@@ -21,7 +21,7 @@ export const StatCard = ({ title, value, icon: Icon, trend, className, valueColo
   return (
     <Card 
       className={cn(
-        "p-6 card-hover relative overflow-hidden group", 
+        "p-6 card-hover relative overflow-hidden group hover:shadow-glow transition-all duration-300", 
         clickable && "cursor-pointer hover:scale-105 transition-transform",
         className
       )}

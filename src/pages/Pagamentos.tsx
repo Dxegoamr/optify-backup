@@ -1,30 +1,156 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
-import { useEmployees } from '@/hooks/useFirestore';
+import { useEmployees, useUpdateEmployee } from '@/hooks/useFirestore';
 import type { Payment } from '@/types';
 
 const Pagamentos = () => {
   const { user } = useFirebaseAuth();
   const { data: employees = [] } = useEmployees(user?.uid || '');
+  const updateEmployee = useUpdateEmployee();
   
-  // Criar payments baseado nos funcionários ativos
-  const payments: Payment[] = employees.map(emp => ({
+  // Estados para edição de salários
+  const [salaryValues, setSalaryValues] = useState<{[key: string]: number}>({});
+  const [paymentStates, setPaymentStates] = useState<{[key: string]: 'paid' | 'pending'}>({});
+  const [savingSalaries, setSavingSalaries] = useState<{[key: string]: boolean}>({});
+  const [focusedInputs, setFocusedInputs] = useState<{[key: string]: boolean}>({});
+  const timeoutRefs = useRef<{[key: string]: NodeJS.Timeout}>({});
+  
+  // Estados para filtros de ordenação
+  const [sortBy, setSortBy] = useState<'name' | 'salary' | 'payDay'>('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  
+  // Inicializar valores de salário
+  useEffect(() => {
+    const initialSalaries: {[key: string]: number} = {};
+    employees.forEach(emp => {
+      initialSalaries[emp.id] = emp.salary || 0;
+    });
+    setSalaryValues(initialSalaries);
+  }, [employees]);
+
+  // Cleanup dos timeouts
+  useEffect(() => {
+    return () => {
+      Object.values(timeoutRefs.current).forEach(timeout => {
+        if (timeout) clearTimeout(timeout);
+      });
+    };
+  }, []);
+  
+  // Função para ordenar funcionários
+  const getSortedEmployees = () => {
+    return [...employees].sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+      
+      switch (sortBy) {
+        case 'name':
+          aValue = a.name.toLowerCase();
+          bValue = b.name.toLowerCase();
+          break;
+        case 'salary':
+          aValue = salaryValues[a.id] || a.salary || 0;
+          bValue = salaryValues[b.id] || b.salary || 0;
+          break;
+        case 'payDay':
+          aValue = a.payDay || 1;
+          bValue = b.payDay || 1;
+          break;
+        default:
+          return 0;
+      }
+      
+      if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+  };
+
+  // Criar payments baseado nos funcionários ordenados
+  const sortedEmployees = getSortedEmployees();
+  const payments: Payment[] = sortedEmployees.map(emp => ({
     id: emp.id,
     employeeId: emp.id,
     employeeName: emp.name,
-    amount: emp.salary || 0,
+    amount: salaryValues[emp.id] || emp.salary || 0,
     status: Math.random() > 0.5 ? 'paid' : 'pending',
     dueDate: new Date().toISOString(),
     paidDate: Math.random() > 0.5 ? new Date().toISOString() : undefined
   }));
-  
-  const [paymentStates, setPaymentStates] = useState<{[key: string]: 'paid' | 'pending'}>({});
+
+  // Função para salvar salário automaticamente
+  const saveSalary = async (employeeId: string, newSalary: number) => {
+    if (!user?.uid) return;
+    
+    setSavingSalaries(prev => ({ ...prev, [employeeId]: true }));
+    
+    try {
+      await updateEmployee.mutateAsync({
+        userId: user.uid,
+        id: employeeId,
+        data: {
+          salary: newSalary,
+          updatedAt: new Date()
+        }
+      });
+      toast.success('Salário atualizado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao atualizar salário:', error);
+      toast.error('Erro ao atualizar salário. Tente novamente.');
+    } finally {
+      setSavingSalaries(prev => ({ ...prev, [employeeId]: false }));
+    }
+  };
+
+  // Função para lidar com mudança de salário
+  const handleSalaryChange = (employeeId: string, value: string) => {
+    const newSalary = parseFloat(value) || 0;
+    
+    // Atualizar estado local imediatamente
+    setSalaryValues(prev => ({
+      ...prev,
+      [employeeId]: newSalary
+    }));
+    
+    // Limpar timeout anterior se existir
+    if (timeoutRefs.current[employeeId]) {
+      clearTimeout(timeoutRefs.current[employeeId]);
+    }
+    
+    // Definir novo timeout para salvar após 2 segundos de inatividade
+    timeoutRefs.current[employeeId] = setTimeout(() => {
+      saveSalary(employeeId, newSalary);
+    }, 2000);
+  };
+
+  // Função para lidar com foco do input
+  const handleInputFocus = (employeeId: string) => {
+    setFocusedInputs(prev => ({ ...prev, [employeeId]: true }));
+  };
+
+  // Função para lidar com perda de foco do input
+  const handleInputBlur = (employeeId: string) => {
+    setFocusedInputs(prev => ({ ...prev, [employeeId]: false }));
+  };
+
+  // Função para ordenar por clique no cabeçalho
+  const handleSortByHeader = (field: 'name' | 'salary' | 'payDay') => {
+    if (sortBy === field) {
+      // Se já está ordenando por este campo, inverte a ordem
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      // Se é um novo campo, define como crescente
+      setSortBy(field);
+      setSortOrder('asc');
+    }
+  };
 
   const togglePaymentStatus = (id: string) => {
     setPaymentStates(prev => ({
@@ -66,15 +192,89 @@ const Pagamentos = () => {
           </Card>
         </div>
 
+        {/* Filtros de Ordenação */}
+        <Card className="p-4 shadow-card">
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-muted-foreground">Ordenar por:</span>
+                <Select value={sortBy} onValueChange={(value: 'name' | 'salary' | 'payDay') => setSortBy(value)}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="name">Nome</SelectItem>
+                    <SelectItem value="salary">Salário</SelectItem>
+                    <SelectItem value="payDay">Dia do Pagamento</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-muted-foreground">Ordem:</span>
+                <Select value={sortOrder} onValueChange={(value: 'asc' | 'desc') => setSortOrder(value)}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="asc">Crescente</SelectItem>
+                    <SelectItem value="desc">Decrescente</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <div className="text-sm text-muted-foreground">
+              {payments.length} funcionário(s) encontrado(s)
+            </div>
+          </div>
+        </Card>
+
         {/* Payments Table */}
         <Card className="shadow-card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-muted/50">
                 <tr>
-                  <th className="text-left p-4 font-semibold">Funcionário</th>
-                  <th className="text-left p-4 font-semibold">Valor</th>
-                  <th className="text-left p-4 font-semibold">Vencimento</th>
+                  <th className="text-left p-4 font-semibold">
+                    <button 
+                      onClick={() => handleSortByHeader('name')}
+                      className="flex items-center gap-2 hover:text-primary transition-colors cursor-pointer"
+                    >
+                      Funcionário
+                      {sortBy === 'name' && (
+                        <span className="text-primary text-xs">
+                          {sortOrder === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
+                  </th>
+                  <th className="text-left p-4 font-semibold">
+                    <button 
+                      onClick={() => handleSortByHeader('salary')}
+                      className="flex items-center gap-2 hover:text-primary transition-colors cursor-pointer"
+                    >
+                      Valor
+                      {sortBy === 'salary' && (
+                        <span className="text-primary text-xs">
+                          {sortOrder === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
+                  </th>
+                  <th className="text-left p-4 font-semibold">
+                    <button 
+                      onClick={() => handleSortByHeader('payDay')}
+                      className="flex items-center gap-2 hover:text-primary transition-colors cursor-pointer"
+                    >
+                      Vencimento
+                      {sortBy === 'payDay' && (
+                        <span className="text-primary text-xs">
+                          {sortOrder === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </button>
+                  </th>
                   <th className="text-left p-4 font-semibold">Status</th>
                   <th className="text-left p-4 font-semibold">Ações</th>
                 </tr>
@@ -84,16 +284,26 @@ const Pagamentos = () => {
                   <tr key={payment.id} className="border-t border-border hover:bg-muted/30 transition-colors">
                     <td className="p-4 font-medium">{payment.employeeName}</td>
                     <td className="p-4">
-                      <Input
-                        type="number"
-                        value={payment.amount}
-                        className="w-32"
-                        onChange={(e) => {
-                          setPayments(payments.map(p => 
-                            p.id === payment.id ? { ...p, amount: parseFloat(e.target.value) } : p
-                          ));
-                        }}
-                      />
+                      <div className="relative">
+                        <Input
+                          type="number"
+                          value={
+                            focusedInputs[payment.employeeId] && (salaryValues[payment.employeeId] || 0) === 0
+                              ? ''
+                              : salaryValues[payment.employeeId] || 0
+                          }
+                          className="w-32 pr-8"
+                          placeholder="0,00"
+                          onChange={(e) => handleSalaryChange(payment.employeeId, e.target.value)}
+                          onFocus={() => handleInputFocus(payment.employeeId)}
+                          onBlur={() => handleInputBlur(payment.employeeId)}
+                        />
+                        {savingSalaries[payment.employeeId] && (
+                          <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
+                          </div>
+                        )}
+                      </div>
                     </td>
                     <td className="p-4 text-sm text-muted-foreground">
                       {new Date(payment.dueDate).toLocaleDateString('pt-BR')}

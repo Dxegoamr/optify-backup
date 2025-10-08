@@ -77,8 +77,14 @@ export class UserSubcollectionsService {
   ): Promise<void> {
     try {
       const docRef = doc(db, this.usersCollection, userId, subcollection, docId);
+      
+      // Filtrar valores undefined para evitar erros do Firestore
+      const cleanData = Object.fromEntries(
+        Object.entries(data).filter(([_, value]) => value !== undefined)
+      );
+      
       await updateDoc(docRef, {
-        ...data,
+        ...cleanData,
         updatedAt: serverTimestamp()
       });
     } catch (error) {

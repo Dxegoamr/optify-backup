@@ -68,7 +68,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
       {/* Sidebar */}
       <aside className="w-72 bg-sidebar border-r border-sidebar-border flex flex-col shadow-xl fixed left-0 top-0 h-screen z-50">
         <div className="p-8 border-b border-sidebar-border/50">
-          <div className="flex items-center gap-3 mb-4">
+          <button onClick={() => navigate('/dashboard')} className="flex items-center gap-3 mb-4">
             <svg 
               className="w-10 h-10 text-primary" 
               viewBox="0 0 24 24" 
@@ -85,7 +85,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             <h1 className="text-2xl font-black text-foreground">
               Optify
             </h1>
-          </div>
+          </button>
           <div className="px-4 py-2 rounded-xl bg-primary/10 border border-primary/20">
             <p className="text-xs text-muted-foreground mb-1">Plano Atual</p>
             <p className="text-sm font-bold text-primary capitalize">Free</p>

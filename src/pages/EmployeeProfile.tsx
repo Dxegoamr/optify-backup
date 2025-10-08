@@ -32,7 +32,10 @@ const EmployeeProfile = () => {
     cpf: '',
     email: '',
     phone: '',
-    birthDate: ''
+    birthDate: '',
+    salary: 0,
+    payDay: 1,
+    status: 'active' as 'active' | 'inactive'
   });
 
   // Buscar funcionário usando Firebase
@@ -56,10 +59,13 @@ const EmployeeProfile = () => {
     if (employee) {
       setEditFormData({
         name: employee.name,
-        cpf: employee.cpf,
+        cpf: employee.cpf || '',
         email: employee.email || '',
         phone: employee.phone || '',
-        birthDate: employee.birthDate || ''
+        birthDate: employee.birthDate || '',
+        salary: employee.salary || 0,
+        payDay: employee.payDay || 1,
+        status: employee.status || 'active'
       });
       setEditModalOpen(true);
     }
@@ -69,18 +75,33 @@ const EmployeeProfile = () => {
   const handleSaveEdit = async () => {
     if (!employee || !user?.uid) return;
 
+    // Validar se o nome foi preenchido
+    if (!editFormData.name.trim()) {
+      toast.error('O nome é obrigatório');
+      return;
+    }
+
     try {
+      const updateData: any = {
+        name: editFormData.name.trim(),
+        updatedAt: new Date()
+      };
+
+      // Adicionar campos apenas se foram preenchidos
+      if (editFormData.cpf.trim()) updateData.cpf = editFormData.cpf.trim();
+      if (editFormData.email.trim()) updateData.email = editFormData.email.trim();
+      if (editFormData.phone.trim()) updateData.phone = editFormData.phone.trim();
+      if (editFormData.birthDate) updateData.birthDate = editFormData.birthDate;
+      if (editFormData.salary > 0) updateData.salary = editFormData.salary;
+      if (editFormData.payDay > 0) updateData.payDay = editFormData.payDay;
+      
+      // Usar o status selecionado no formulário
+      updateData.status = editFormData.status;
+
       await updateEmployee.mutateAsync({
+        userId: user.uid,
         id: employee.id,
-        data: {
-          name: editFormData.name,
-          cpf: editFormData.cpf,
-          email: editFormData.email,
-          phone: editFormData.phone,
-          birthDate: editFormData.birthDate,
-          salary: employee.salary, // Manter valor atual
-          status: employee.status // Manter status atual
-        }
+        data: updateData
       });
       
       toast.success('Funcionário atualizado com sucesso!');
@@ -93,10 +114,13 @@ const EmployeeProfile = () => {
 
   // Função para excluir funcionário
   const handleDeleteEmployee = async () => {
-    if (!employee) return;
+    if (!employee || !user?.uid) return;
 
     try {
-      await deleteEmployee.mutateAsync(employee.id);
+      await deleteEmployee.mutateAsync({
+        userId: user.uid,
+        id: employee.id
+      });
       toast.success('Funcionário excluído com sucesso!');
       navigate('/gestao-funcionarios');
     } catch (error) {
@@ -300,11 +324,11 @@ const EmployeeProfile = () => {
               </div>
             )}
 
-            {employee.birth_date && (
+            {employee.birthDate && (
               <div>
                 <Label className="text-sm text-muted-foreground">Data de Nascimento</Label>
                 <p className="text-lg font-semibold">
-                  {new Date(employee.birth_date).toLocaleDateString('pt-BR')}
+                  {new Date(employee.birthDate).toLocaleDateString('pt-BR')}
                 </p>
               </div>
             )}
@@ -313,8 +337,14 @@ const EmployeeProfile = () => {
             <div>
               <Label className="text-sm text-muted-foreground">Status</Label>
               <div className="mt-2">
-                <Badge variant={employee.status === 'active' ? 'default' : 'secondary'}>
-                  {employee.status === 'active' ? 'Ativo' : 'Inativo'}
+                <Badge 
+                  variant={employee.status === 'active' ? 'default' : 'secondary'}
+                  className={employee.status === 'active' ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'}
+                >
+                  <div className="flex items-center gap-1">
+                    <div className={`w-2 h-2 rounded-full ${employee.status === 'active' ? 'bg-white' : 'bg-white'}`}></div>
+                    {employee.status === 'active' ? 'Ativo' : 'Inativo'}
+                  </div>
                 </Badge>
               </div>
             </div>
@@ -487,6 +517,9 @@ const EmployeeProfile = () => {
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
               <DialogTitle>Editar Funcionário</DialogTitle>
+              <p className="text-sm text-muted-foreground">
+                Preencha as informações do funcionário. Apenas o nome é obrigatório.
+              </p>
             </DialogHeader>
             <div className="space-y-4">
               <div className="space-y-2">
@@ -504,6 +537,7 @@ const EmployeeProfile = () => {
                   id="edit-cpf"
                   value={editFormData.cpf}
                   onChange={(e) => setEditFormData(prev => ({ ...prev, cpf: e.target.value }))}
+                  placeholder="000.000.000-00 (opcional)"
                 />
               </div>
 
@@ -514,6 +548,7 @@ const EmployeeProfile = () => {
                   type="email"
                   value={editFormData.email}
                   onChange={(e) => setEditFormData(prev => ({ ...prev, email: e.target.value }))}
+                  placeholder="email@exemplo.com (opcional)"
                 />
               </div>
 
@@ -523,6 +558,7 @@ const EmployeeProfile = () => {
                   id="edit-phone"
                   value={editFormData.phone}
                   onChange={(e) => setEditFormData(prev => ({ ...prev, phone: e.target.value }))}
+                  placeholder="(00) 00000-0000 (opcional)"
                 />
               </div>
 
@@ -536,6 +572,55 @@ const EmployeeProfile = () => {
                 />
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="edit-salary">Salário (R$)</Label>
+                <Input
+                  id="edit-salary"
+                  type="number"
+                  placeholder="0,00"
+                  value={editFormData.salary}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, salary: Number(e.target.value) || 0 }))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-payDay">Dia do Pagamento</Label>
+                <Select value={editFormData.payDay.toString()} onValueChange={(value) => setEditFormData(prev => ({ ...prev, payDay: Number(value) }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o dia" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
+                      <SelectItem key={day} value={day.toString()}>
+                        {day}º dia do mês
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-status">Status do Funcionário</Label>
+                <Select value={editFormData.status} onValueChange={(value: 'active' | 'inactive') => setEditFormData(prev => ({ ...prev, status: value }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        Ativo
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="inactive">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                        Inativo
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
               <div className="flex justify-end space-x-2 pt-4">
                 <Button type="button" variant="outline" onClick={() => setEditModalOpen(false)}>

@@ -15,6 +15,8 @@ interface EmployeeFormData {
   email: string;
   phone: string;
   birthDate: string;
+  salary: number;
+  payDay: number;
 }
 
 const EmployeeFormModal = () => {
@@ -26,7 +28,9 @@ const EmployeeFormModal = () => {
     cpf: '',
     email: '',
     phone: '',
-    birthDate: ''
+    birthDate: '',
+    salary: 0,
+    payDay: 1
   });
   const [errors, setErrors] = useState<Partial<EmployeeFormData>>({});
 
@@ -37,26 +41,19 @@ const EmployeeFormModal = () => {
       newErrors.name = 'Nome é obrigatório';
     }
 
-    if (!formData.cpf.trim()) {
-      newErrors.cpf = 'CPF é obrigatório';
-    } else if (!/^\d{3}\.\d{3}\.\d{3}-\d{2}$/.test(formData.cpf)) {
+    // CPF é opcional, mas se preenchido deve estar no formato correto
+    if (formData.cpf.trim() && !/^\d{3}\.\d{3}\.\d{3}-\d{2}$/.test(formData.cpf)) {
       newErrors.cpf = 'CPF deve estar no formato 000.000.000-00';
     }
 
-    if (!formData.email.trim()) {
-      newErrors.email = 'E-mail é obrigatório';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+    // Email é opcional, mas se preenchido deve ser válido
+    if (formData.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = 'E-mail inválido';
     }
 
-    if (!formData.phone.trim()) {
-      newErrors.phone = 'Telefone é obrigatório';
-    } else if (!/^\(\d{2}\)\s\d{4,5}-\d{4}$/.test(formData.phone)) {
+    // Telefone é opcional, mas se preenchido deve estar no formato correto
+    if (formData.phone.trim() && !/^\(\d{2}\)\s\d{4,5}-\d{4}$/.test(formData.phone)) {
       newErrors.phone = 'Telefone deve estar no formato (00) 00000-0000';
-    }
-
-    if (!formData.birthDate) {
-      newErrors.birthDate = 'Data de nascimento é obrigatória';
     }
 
     setErrors(newErrors);
@@ -111,12 +108,13 @@ const EmployeeFormModal = () => {
       await createEmployee.mutateAsync({
         userId: user.uid,
         name: formData.name.trim(),
-        cpf: formData.cpf,
-        email: formData.email.trim(),
-        phone: formData.phone,
-        birthDate: formData.birthDate,
-        salary: 0, // Valor padrão
-        status: 'active' // Status padrão
+        cpf: formData.cpf.trim() || '',
+        email: formData.email.trim() || '',
+        phone: formData.phone.trim() || '',
+        birthDate: formData.birthDate || '',
+        salary: formData.salary || 0,
+        payDay: formData.payDay || 1,
+        status: 'active'
       });
 
       toast.success('Funcionário cadastrado com sucesso!');
@@ -126,7 +124,9 @@ const EmployeeFormModal = () => {
         cpf: '',
         email: '',
         phone: '',
-        birthDate: ''
+        birthDate: '',
+        salary: 0,
+        payDay: 1
       });
     } catch (error) {
       console.error('Erro ao cadastrar funcionário:', error);
@@ -145,6 +145,9 @@ const EmployeeFormModal = () => {
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Cadastrar Novo Funcionário</DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            Preencha as informações do funcionário. Apenas o nome é obrigatório.
+          </p>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
@@ -160,12 +163,12 @@ const EmployeeFormModal = () => {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="cpf">CPF *</Label>
+            <Label htmlFor="cpf">CPF</Label>
             <Input
               id="cpf"
               value={formData.cpf}
               onChange={(e) => handleInputChange('cpf', e.target.value)}
-              placeholder="000.000.000-00"
+              placeholder="000.000.000-00 (opcional)"
               maxLength={14}
               className={errors.cpf ? 'border-destructive' : ''}
             />
@@ -173,25 +176,25 @@ const EmployeeFormModal = () => {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="email">E-mail *</Label>
+            <Label htmlFor="email">E-mail</Label>
             <Input
               id="email"
               type="email"
               value={formData.email}
               onChange={(e) => handleInputChange('email', e.target.value)}
-              placeholder="exemplo@email.com"
+              placeholder="exemplo@email.com (opcional)"
               className={errors.email ? 'border-destructive' : ''}
             />
             {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="phone">Telefone *</Label>
+            <Label htmlFor="phone">Telefone</Label>
             <Input
               id="phone"
               value={formData.phone}
               onChange={(e) => handleInputChange('phone', e.target.value)}
-              placeholder="(00) 00000-0000"
+              placeholder="(00) 00000-0000 (opcional)"
               maxLength={15}
               className={errors.phone ? 'border-destructive' : ''}
             />
@@ -199,7 +202,7 @@ const EmployeeFormModal = () => {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="birthDate">Data de Nascimento *</Label>
+            <Label htmlFor="birthDate">Data de Nascimento</Label>
             <Input
               id="birthDate"
               type="date"
@@ -208,6 +211,35 @@ const EmployeeFormModal = () => {
               className={errors.birthDate ? 'border-destructive' : ''}
             />
             {errors.birthDate && <p className="text-sm text-destructive">{errors.birthDate}</p>}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="salary">Salário (R$)</Label>
+            <Input
+              id="salary"
+              type="number"
+              value={formData.salary}
+              onChange={(e) => handleInputChange('salary', e.target.value)}
+              placeholder="0"
+              min="0"
+              step="0.01"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="payDay">Dia do Pagamento</Label>
+            <Select value={formData.payDay.toString()} onValueChange={(value) => handleInputChange('payDay', value)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione o dia" />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 28 }, (_, i) => i + 1).map((day) => (
+                  <SelectItem key={day} value={day.toString()}>
+                    {day}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
 
