@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Target } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
-import { useTransactions } from '@/hooks/useFirestore';
+import { useTransactions, useAllDailySummaries } from '@/hooks/useFirestore';
 import { UserConfigService } from '@/core/services/user-config.service';
 import { toast } from 'sonner';
 
@@ -44,15 +44,35 @@ const MonthlyGoalCard = () => {
   const endDate = lastDay.toISOString().split('T')[0];
   
   const { data: monthlyTransactions = [] } = useTransactions(user?.uid || '', startDate, endDate);
+  const { data: dailySummaries = [] } = useAllDailySummaries(user?.uid || '');
   
-  // Calcular lucro mensal
-  const monthlyProfit = monthlyTransactions.reduce((total, transaction) => {
-    if (transaction.type === 'deposit') {
-      return total - transaction.amount; // Depósito é saída de dinheiro (negativo)
-    } else {
-      return total + transaction.amount; // Saque é entrada de dinheiro (positivo)
-    }
+  // CORREÇÃO: Usar a mesma lógica do Dashboard
+  const currentYear = currentDate.getFullYear();
+  const currentMonth = currentDate.getMonth();
+  
+  // Filtrar fechamentos diários do mês atual
+  const monthlySummaries = dailySummaries.filter((summary: any) => {
+    const summaryDate = new Date(summary.date);
+    return summaryDate.getFullYear() === currentYear && summaryDate.getMonth() === currentMonth;
+  });
+  
+  // Somar lucros dos fechamentos diários
+  const monthlyRevenueFromSummaries = monthlySummaries.reduce((total: number, summary: any) => {
+    return total + (summary.profit || summary.margin || 0);
   }, 0);
+  
+  // Filtrar apenas transações que NÃO estão em fechamentos diários
+  const closedDates = new Set(monthlySummaries.map((summary: any) => summary.date));
+  const openTransactions = monthlyTransactions.filter((transaction: any) => {
+    return !closedDates.has(transaction.date);
+  });
+  
+  const monthlyRevenueFromTransactions = openTransactions.reduce((total: number, transaction: any) => {
+    const transactionProfit = transaction.type === 'withdraw' ? transaction.amount : -transaction.amount;
+    return total + transactionProfit;
+  }, 0);
+  
+  const monthlyProfit = monthlyRevenueFromSummaries + monthlyRevenueFromTransactions;
 
   const handleUpdateGoal = async () => {
     const goalValue = Number(newGoal);
@@ -83,7 +103,29 @@ const MonthlyGoalCard = () => {
   const progress = monthlyGoal > 0 ? Math.min((monthlyProfit / monthlyGoal) * 100, 100) : 0;
   
   // Debug temporário
-  console.log('MonthlyGoalCard Debug:', { monthlyProfit, monthlyGoal, progress });
+  console.log('MonthlyGoalCard Debug:', { 
+    monthlyProfit, 
+    monthlyGoal, 
+    progress,
+    monthlyTransactions: monthlyTransactions.length,
+    monthlySummaries: monthlySummaries.length,
+    monthlyRevenueFromSummaries,
+    openTransactions: openTransactions.length,
+    monthlyRevenueFromTransactions,
+    startDate,
+    endDate
+  });
+  
+  console.log('MonthlyGoalCard - Fechamentos Diários:');
+  monthlySummaries.forEach((summary: any, index: number) => {
+    console.log(`  ${index + 1}. Data: ${summary.date}, Profit: ${summary.profit || summary.margin || 0}`);
+  });
+  
+  console.log('MonthlyGoalCard - Transações Abertas:');
+  openTransactions.forEach((transaction: any, index: number) => {
+    const profit = transaction.type === 'withdraw' ? transaction.amount : -transaction.amount;
+    console.log(`  ${index + 1}. Data: ${transaction.date}, Tipo: ${transaction.type}, Valor: ${transaction.amount}, Profit: ${profit}`);
+  });
 
   return (
     <Card className="p-6 shadow-card">

@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from 'recharts';
 import { Download, TrendingUp, TrendingDown, Calendar, FileText, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
-import { useEmployees, useTransactions, usePlatforms } from '@/hooks/useFirestore';
+import { useEmployees, useTransactions, usePlatforms, useAllDailySummaries } from '@/hooks/useFirestore';
 import { toast } from 'sonner';
 import { getCurrentDateStringInSaoPaulo, getCurrentDateInSaoPaulo } from '@/utils/timezone';
 
@@ -26,6 +26,7 @@ const Relatorios = () => {
   // Buscar dados do Firebase
   const { data: employees = [] } = useEmployees(user?.uid || '');
   const { data: platforms = [] } = usePlatforms(user?.uid || '');
+  const { data: dailySummaries = [] } = useAllDailySummaries(user?.uid || '');
   
   // Buscar transações do mês atual
   const startOfMonth = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
@@ -121,7 +122,7 @@ const Relatorios = () => {
 
   // Função para calcular lucro/prejuízo do dia de um funcionário
   const getDayProfitLoss = (employee: any) => {
-    const employeeTodayTransactions = todayTransactions.filter(
+    const employeeTodayTransactions = monthlyTransactions.filter(
       (t: any) => t.employeeId === employee.id
     );
 
@@ -147,13 +148,48 @@ const Relatorios = () => {
     comparisonEndOfMonth
   );
 
-  // Calcular estatísticas do mês atual
+  // Calcular estatísticas do mês atual - CORREÇÃO: Usar mesma lógica do Dashboard
   const monthlyStats = useMemo(() => {
+    // Filtrar fechamentos diários do mês atual
+    const monthlySummaries = dailySummaries.filter((summary: any) => {
+      const summaryDate = new Date(summary.date);
+      return summaryDate.getFullYear() === selectedYear && summaryDate.getMonth() === selectedMonth - 1;
+    });
+    
+    // Somar lucros dos fechamentos diários
+    const monthlyRevenueFromSummaries = monthlySummaries.reduce((total: number, summary: any) => {
+      return total + (summary.profit || summary.margin || 0);
+    }, 0);
+    
+    // Filtrar apenas transações que NÃO estão em fechamentos diários
+    const closedDates = new Set(monthlySummaries.map((summary: any) => summary.date));
+    const openTransactions = monthlyTransactions.filter((transaction: any) => {
+      return !closedDates.has(transaction.date);
+    });
+    
+    const monthlyRevenueFromTransactions = openTransactions.reduce((total: number, transaction: any) => {
+      const transactionProfit = transaction.type === 'withdraw' ? transaction.amount : -transaction.amount;
+      return total + transactionProfit;
+    }, 0);
+    
+    const profit = monthlyRevenueFromSummaries + monthlyRevenueFromTransactions;
+    
+    // Calcular depósitos e saques totais para exibição
     const deposits = monthlyTransactions.filter((t: any) => t.type === 'deposit');
     const withdraws = monthlyTransactions.filter((t: any) => t.type === 'withdraw');
     const totalDeposits = deposits.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
     const totalWithdraws = withdraws.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
-    const profit = totalWithdraws - totalDeposits;
+    
+    console.log('Relatórios - Cálculo Receita Mensal:', {
+      selectedYear,
+      selectedMonth,
+      monthlySummaries: monthlySummaries.length,
+      monthlyRevenueFromSummaries,
+      monthlyTransactions: monthlyTransactions.length,
+      openTransactions: openTransactions.length,
+      monthlyRevenueFromTransactions,
+      profit
+    });
     
     return {
       deposits: totalDeposits,
@@ -161,17 +197,41 @@ const Relatorios = () => {
       profit,
       transactionCount: monthlyTransactions.length
     };
-  }, [monthlyTransactions]);
+  }, [monthlyTransactions, dailySummaries, selectedYear, selectedMonth]);
 
-  // Calcular estatísticas do mês de comparação
+  // Calcular estatísticas do mês de comparação - CORREÇÃO: Usar mesma lógica
   const comparisonStats = useMemo(() => {
     if (!comparisonTransactions.length) return null;
     
+    // Filtrar fechamentos diários do mês de comparação
+    const comparisonSummaries = dailySummaries.filter((summary: any) => {
+      const summaryDate = new Date(summary.date);
+      return summaryDate.getFullYear() === comparisonYear && summaryDate.getMonth() === (comparisonMonth || 0) - 1;
+    });
+    
+    // Somar lucros dos fechamentos diários
+    const comparisonRevenueFromSummaries = comparisonSummaries.reduce((total: number, summary: any) => {
+      return total + (summary.profit || summary.margin || 0);
+    }, 0);
+    
+    // Filtrar apenas transações que NÃO estão em fechamentos diários
+    const closedDates = new Set(comparisonSummaries.map((summary: any) => summary.date));
+    const openComparisonTransactions = comparisonTransactions.filter((transaction: any) => {
+      return !closedDates.has(transaction.date);
+    });
+    
+    const comparisonRevenueFromTransactions = openComparisonTransactions.reduce((total: number, transaction: any) => {
+      const transactionProfit = transaction.type === 'withdraw' ? transaction.amount : -transaction.amount;
+      return total + transactionProfit;
+    }, 0);
+    
+    const profit = comparisonRevenueFromSummaries + comparisonRevenueFromTransactions;
+    
+    // Calcular depósitos e saques totais para exibição
     const deposits = comparisonTransactions.filter((t: any) => t.type === 'deposit');
     const withdraws = comparisonTransactions.filter((t: any) => t.type === 'withdraw');
     const totalDeposits = deposits.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
     const totalWithdraws = withdraws.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
-    const profit = totalWithdraws - totalDeposits;
     
     return {
       deposits: totalDeposits,
@@ -179,35 +239,111 @@ const Relatorios = () => {
       profit,
       transactionCount: comparisonTransactions.length
     };
-  }, [comparisonTransactions]);
+  }, [comparisonTransactions, dailySummaries, comparisonYear, comparisonMonth]);
 
-  // Calcular dados diários do mês
+  // Calcular dados diários do mês - CORREÇÃO: Usar mesma lógica do Dashboard
   const dailyData = useMemo(() => {
     const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
     const dailyStats: any[] = [];
     
+    // Filtrar fechamentos diários do mês atual
+    const monthlySummaries = dailySummaries.filter((summary: any) => {
+      const summaryDate = new Date(summary.date);
+      const matches = summaryDate.getFullYear() === selectedYear && summaryDate.getMonth() === selectedMonth - 1;
+      console.log(`Fechamento ${summary.date}:`, {
+        summaryDate: summaryDate.toISOString(),
+        year: summaryDate.getFullYear(),
+        month: summaryDate.getMonth(),
+        selectedYear,
+        selectedMonth: selectedMonth - 1,
+        matches
+      });
+      return matches;
+    });
+    
+    // Criar mapa de fechamentos por data
+    const summariesByDate = new Map<string, any>();
+    monthlySummaries.forEach((summary: any) => {
+      summariesByDate.set(summary.date, summary);
+    });
+    
+    // Criar mapa de transações abertas por data (não fechadas)
+    const closedDates = new Set(monthlySummaries.map((summary: any) => summary.date));
+    const openTransactionsByDate = new Map<string, any[]>();
+    
+    monthlyTransactions.forEach((transaction: any) => {
+      if (!closedDates.has(transaction.date)) {
+        if (!openTransactionsByDate.has(transaction.date)) {
+          openTransactionsByDate.set(transaction.date, []);
+        }
+        openTransactionsByDate.get(transaction.date)!.push(transaction);
+      }
+    });
+    
     for (let day = 1; day <= daysInMonth; day++) {
       const dateString = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      const dayTransactions = monthlyTransactions.filter((t: any) => t.date === dateString);
       
-      const deposits = dayTransactions.filter((t: any) => t.type === 'deposit');
-      const withdraws = dayTransactions.filter((t: any) => t.type === 'withdraw');
-      const dayDeposits = deposits.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
-      const dayWithdraws = withdraws.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
-      const dayProfit = dayWithdraws - dayDeposits; // Lucro = Saques - Depósitos
+      let dayProfit = 0;
+      let dayDeposits = 0;
+      let dayWithdraws = 0;
+      let dayTransactions = 0;
+      
+      // Verificar se há fechamento para este dia
+      const summary = summariesByDate.get(dateString);
+      if (summary) {
+        // Usar dados do fechamento
+        dayProfit = summary.profit || summary.margin || 0;
+        dayDeposits = summary.totalDeposits || 0;
+        dayWithdraws = summary.totalWithdraws || 0;
+        dayTransactions = summary.transactionCount || 0;
+        console.log(`Dia ${day} (${dateString}): Usando fechamento - Profit: ${dayProfit}`);
+      } else {
+        // Usar transações abertas
+        const dayTransactionsOpen = openTransactionsByDate.get(dateString) || [];
+        const deposits = dayTransactionsOpen.filter((t: any) => t.type === 'deposit');
+        const withdraws = dayTransactionsOpen.filter((t: any) => t.type === 'withdraw');
+        dayDeposits = deposits.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+        dayWithdraws = withdraws.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+        dayProfit = dayWithdraws - dayDeposits;
+        dayTransactions = dayTransactionsOpen.length;
+        if (dayProfit !== 0) {
+          console.log(`Dia ${day} (${dateString}): Usando transações abertas - Profit: ${dayProfit}`);
+        }
+      }
       
       dailyStats.push({
         day: day,
         date: dateString,
-        lucroPrejuizo: dayProfit, // Apenas uma métrica: lucro ou prejuízo
+        lucroPrejuizo: dayProfit,
         depositos: dayDeposits,
         saques: dayWithdraws,
-        transacoes: dayTransactions.length
+        transacoes: dayTransactions
       });
     }
     
+    console.log('Relatórios - DailyData calculado:', {
+      selectedYear,
+      selectedMonth,
+      monthlySummaries: monthlySummaries.length,
+      monthlyTransactions: monthlyTransactions.length,
+      dailyStats: dailyStats.filter(d => d.lucroPrejuizo !== 0).length
+    });
+    
+    console.log('Relatórios - Fechamentos diários detalhados:', monthlySummaries.map((s: any) => ({
+      date: s.date,
+      profit: s.profit || s.margin || 0,
+      totalDeposits: s.totalDeposits || 0,
+      totalWithdraws: s.totalWithdraws || 0
+    })));
+    
+    console.log('Relatórios - Dias com lucro no gráfico:', dailyStats.filter(d => d.lucroPrejuizo !== 0).map(d => ({
+      day: d.day,
+      date: d.date,
+      lucroPrejuizo: d.lucroPrejuizo
+    })));
+    
     return dailyStats;
-  }, [monthlyTransactions, selectedMonth, selectedYear]);
+  }, [monthlyTransactions, dailySummaries, selectedMonth, selectedYear]);
 
   // Gerar segmentos de linha coloridos
   const lineSegments = useMemo(() => {
@@ -1318,8 +1454,12 @@ const Relatorios = () => {
                 const startX = (segment.startDay - 1) / (dailyData.length - 1) * 100;
                 const endX = (segment.endDay - 1) / (dailyData.length - 1) * 100;
                 
-                // Escala fixa: R$ 2000 no topo, R$ 0 no centro, -R$ 2000 na base
-                const scale = 2000;
+                // Escala dinâmica baseada nos valores reais dos dados
+                const allValues = dailyData.map(d => d.lucroPrejuizo);
+                const maxValue = Math.max(...allValues, 0);
+                const minValue = Math.min(...allValues, 0);
+                const maxAbs = Math.max(Math.abs(maxValue), Math.abs(minValue));
+                const scale = maxAbs > 0 ? maxAbs * 1.2 : 1000; // 20% de margem, mínimo 1000
                 
                 // Calcular Y: 0 fica em 50%, valores positivos sobem, negativos descem
                 const startY = segment.startValue >= 0 
@@ -1348,8 +1488,12 @@ const Relatorios = () => {
               {dailyData.map((point, index) => {
                 const x = (point.day - 1) / (dailyData.length - 1) * 100;
                 
-                // Escala fixa: R$ 2000 no topo, R$ 0 no centro, -R$ 2000 na base
-                const scale = 2000;
+                // Escala dinâmica baseada nos valores reais dos dados
+                const allValues = dailyData.map(d => d.lucroPrejuizo);
+                const maxValue = Math.max(...allValues, 0);
+                const minValue = Math.min(...allValues, 0);
+                const maxAbs = Math.max(Math.abs(maxValue), Math.abs(minValue));
+                const scale = maxAbs > 0 ? maxAbs * 1.2 : 1000; // 20% de margem, mínimo 1000
                 
                 // Calcular Y: 0 fica em 50%, valores positivos sobem, negativos descem
                 const y = point.lucroPrejuizo >= 0 
@@ -1389,20 +1533,34 @@ const Relatorios = () => {
               })}
             </div>
 
-            {/* Labels do eixo Y */}
-            <div className="absolute left-0 top-0 bottom-0 flex flex-col justify-between py-4 pl-2">
-              <span className="text-xs text-muted-foreground">R$ 2.000</span>
-              <span className="text-xs text-muted-foreground">R$ 0</span>
-              <span className="text-xs text-muted-foreground">-R$ 2.000</span>
-            </div>
+            {/* Labels do eixo Y - Dinâmicos */}
+            {(() => {
+              const allValues = dailyData.map(d => d.lucroPrejuizo);
+              const maxValue = Math.max(...allValues, 0);
+              const minValue = Math.min(...allValues, 0);
+              const maxAbs = Math.max(Math.abs(maxValue), Math.abs(minValue));
+              const scale = maxAbs > 0 ? maxAbs * 1.2 : 1000;
+              
+              return (
+                <div className="absolute left-0 top-0 bottom-0 flex flex-col justify-between py-4 pl-2">
+                  <span className="text-xs text-muted-foreground">R$ {scale.toLocaleString('pt-BR')}</span>
+                  <span className="text-xs text-muted-foreground">R$ 0</span>
+                  <span className="text-xs text-muted-foreground">-R$ {scale.toLocaleString('pt-BR')}</span>
+                </div>
+              );
+            })()}
 
             {/* Valores em cima dos pontos */}
             <div className="absolute inset-0">
               {dailyData.map((point, index) => {
                 const x = (point.day - 1) / (dailyData.length - 1) * 100;
                 
-                // Usar a mesma escala fixa dos pontos
-                const scale = 5000;
+                // Usar a mesma escala dinâmica dos pontos
+                const allValues = dailyData.map(d => d.lucroPrejuizo);
+                const maxValue = Math.max(...allValues, 0);
+                const minValue = Math.min(...allValues, 0);
+                const maxAbs = Math.max(Math.abs(maxValue), Math.abs(minValue));
+                const scale = maxAbs > 0 ? maxAbs * 1.2 : 1000; // 20% de margem, mínimo 1000
                 
                 const y = point.lucroPrejuizo >= 0 
                   ? 50 - (point.lucroPrejuizo / scale) * 40

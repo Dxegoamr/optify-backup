@@ -64,6 +64,7 @@ export interface UserAccount {
 // Serviços específicos para cada tipo de dado
 export class UserEmployeeService {
   static async createEmployee(userId: string, employeeData: Omit<UserEmployee, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
+    console.log('UserEmployeeService.createEmployee - dados recebidos:', { userId, employeeData });
     return UserSubcollectionsService.addToUserSubcollection(
       userId, 
       USER_SUBCOLLECTIONS.EMPLOYEES, 
@@ -72,11 +73,14 @@ export class UserEmployeeService {
   }
 
   static async getEmployees(userId: string): Promise<UserEmployee[]> {
-    return UserSubcollectionsService.getAllFromUserSubcollection<UserEmployee>(
+    console.log('UserEmployeeService.getEmployees - buscando funcionários para userId:', userId);
+    const employees = await UserSubcollectionsService.getAllFromUserSubcollection<UserEmployee>(
       userId, 
       USER_SUBCOLLECTIONS.EMPLOYEES,
       [orderBy('createdAt', 'desc')]
     );
+    console.log('Funcionários encontrados:', employees);
+    return employees;
   }
 
   static async getActiveEmployees(userId: string): Promise<UserEmployee[]> {
@@ -161,27 +165,33 @@ export class UserTransactionService {
     return UserSubcollectionsService.getAllFromUserSubcollection<UserTransaction>(
       userId, 
       USER_SUBCOLLECTIONS.TRANSACTIONS,
-      [orderBy('date', 'desc'), orderBy('createdAt', 'desc'), limit(limitCount)]
+      [limit(limitCount)]
     );
   }
 
   static async getTransactionsByDateRange(userId: string, startDate: string, endDate: string): Promise<UserTransaction[]> {
-    return UserSubcollectionsService.getAllFromUserSubcollection<UserTransaction>(
+    console.log('UserTransactionService.getTransactionsByDateRange - userId:', userId);
+    console.log('UserTransactionService.getTransactionsByDateRange - startDate:', startDate);
+    console.log('UserTransactionService.getTransactionsByDateRange - endDate:', endDate);
+    
+    const transactions = await UserSubcollectionsService.getAllFromUserSubcollection<UserTransaction>(
       userId, 
       USER_SUBCOLLECTIONS.TRANSACTIONS,
       [
         where('date', '>=', startDate),
-        where('date', '<=', endDate),
-        orderBy('date', 'desc')
+        where('date', '<=', endDate)
       ]
     );
+    
+    console.log('UserTransactionService.getTransactionsByDateRange - transactions found:', transactions);
+    return transactions;
   }
 
   static async getTransactionsByEmployee(userId: string, employeeId: string): Promise<UserTransaction[]> {
     return UserSubcollectionsService.getAllFromUserSubcollection<UserTransaction>(
       userId, 
       USER_SUBCOLLECTIONS.TRANSACTIONS,
-      [where('employeeId', '==', employeeId), orderBy('date', 'desc')]
+      [where('employeeId', '==', employeeId)]
     );
   }
 
@@ -206,9 +216,37 @@ export class UserTransactionService {
 export class UserDailySummaryService {
   static async createDailySummary(userId: string, summaryData: Omit<UserDailySummary, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
     return UserSubcollectionsService.addToUserSubcollection(
-      userId, 
-      USER_SUBCOLLECTIONS.DAILY_SUMMARIES, 
+      userId,
+      USER_SUBCOLLECTIONS.DAILY_SUMMARIES,
       summaryData
+    );
+  }
+
+  static async getAllDailySummaries(userId: string): Promise<UserDailySummary[]> {
+    console.log('UserDailySummaryService.getAllDailySummaries - userId:', userId);
+    const summaries = await UserSubcollectionsService.getAllFromUserSubcollection<UserDailySummary>(
+      userId,
+      USER_SUBCOLLECTIONS.DAILY_SUMMARIES,
+      []
+    );
+    console.log('UserDailySummaryService.getAllDailySummaries - summaries found:', summaries);
+    return summaries;
+  }
+
+  static async updateDailySummary(userId: string, summaryId: string, summaryData: Partial<UserDailySummary>): Promise<void> {
+    return UserSubcollectionsService.updateUserSubcollection(
+      userId,
+      USER_SUBCOLLECTIONS.DAILY_SUMMARIES,
+      summaryId,
+      summaryData
+    );
+  }
+
+  static async deleteDailySummary(userId: string, summaryId: string): Promise<void> {
+    return UserSubcollectionsService.deleteFromUserSubcollection(
+      userId,
+      USER_SUBCOLLECTIONS.DAILY_SUMMARIES,
+      summaryId
     );
   }
 

@@ -24,10 +24,22 @@ export const useCreateEmployee = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ userId, data }: { userId: string; data: any }) =>
-      UserEmployeeService.createEmployee(userId, data),
+    mutationFn: (data: any) => {
+      console.log('useCreateEmployee - dados recebidos:', data);
+      // Se os dados já contêm userId, usar diretamente
+      if (data.userId) {
+        const { userId, ...employeeData } = data;
+        return UserEmployeeService.createEmployee(userId, employeeData);
+      }
+      // Caso contrário, assumir que é a estrutura antiga
+      return UserEmployeeService.createEmployee(data.userId, data.data);
+    },
     onSuccess: () => {
+      console.log('useCreateEmployee - funcionário criado com sucesso, invalidando queries');
       queryClient.invalidateQueries({ queryKey: ['firebase-employees'] });
+    },
+    onError: (error) => {
+      console.error('useCreateEmployee - erro ao criar funcionário:', error);
     }
   });
 };
@@ -106,9 +118,15 @@ export const useTransactions = (userId: string, startDate?: string, endDate?: st
   return useQuery({
     queryKey: ['firebase-transactions', userId, startDate, endDate],
     queryFn: () => {
+      console.log('useTransactions - userId:', userId);
+      console.log('useTransactions - startDate:', startDate);
+      console.log('useTransactions - endDate:', endDate);
+      
       if (startDate && endDate) {
+        console.log('useTransactions - Calling getTransactionsByDateRange');
         return UserTransactionService.getTransactionsByDateRange(userId, startDate, endDate);
       }
+      console.log('useTransactions - Calling getTransactions');
       return UserTransactionService.getTransactions(userId);
     },
     enabled: !!userId
@@ -136,7 +154,33 @@ export const useDeleteTransaction = () => {
   return useMutation({
     mutationFn: (id: string) => UserTransactionService.deleteTransaction(user?.uid || '', id),
     onSuccess: () => {
+      // Invalidar todas as queries relacionadas a transações
       queryClient.invalidateQueries({ queryKey: ['firebase-transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['firebase-employees'] });
+      queryClient.invalidateQueries({ queryKey: ['firebase-daily-summaries'] });
+      queryClient.invalidateQueries({ queryKey: ['firebase-platforms'] });
+      // Forçar refetch de todas as queries
+      queryClient.refetchQueries();
+    }
+  });
+};
+
+export const useUpdateTransaction = () => {
+  const queryClient = useQueryClient();
+  const { user } = useFirebaseAuth();
+  
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => {
+      return UserTransactionService.updateTransaction(user?.uid || '', id, data);
+    },
+    onSuccess: () => {
+      // Invalidar todas as queries relacionadas a transações
+      queryClient.invalidateQueries({ queryKey: ['firebase-transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['firebase-employees'] });
+      queryClient.invalidateQueries({ queryKey: ['firebase-daily-summaries'] });
+      queryClient.invalidateQueries({ queryKey: ['firebase-platforms'] });
+      // Forçar refetch de todas as queries
+      queryClient.refetchQueries();
     }
   });
 };
@@ -238,6 +282,47 @@ export const useDailySummaries = (userId: string) => {
     queryKey: ['firebase-daily-summaries', userId],
     queryFn: () => UserDailySummaryService.getDailySummaries(userId),
     enabled: !!userId
+  });
+};
+
+export const useAllDailySummaries = (userId: string) => {
+  return useQuery({
+    queryKey: ['firebase-all-daily-summaries', userId],
+    queryFn: async () => {
+      console.log('useAllDailySummaries - userId:', userId);
+      const summaries = await UserDailySummaryService.getAllDailySummaries(userId);
+      console.log('useAllDailySummaries - summaries found:', summaries);
+      return summaries;
+    },
+    enabled: !!userId
+  });
+};
+
+export const useUpdateDailySummary = () => {
+  const queryClient = useQueryClient();
+  const { user } = useFirebaseAuth();
+  
+  return useMutation({
+    mutationFn: ({ summaryId, summaryData }: { summaryId: string; summaryData: Partial<any> }) => 
+      UserDailySummaryService.updateDailySummary(user?.uid || '', summaryId, summaryData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['firebase-all-daily-summaries'] });
+      queryClient.invalidateQueries({ queryKey: ['firebase-daily-summaries'] });
+    }
+  });
+};
+
+export const useDeleteDailySummary = () => {
+  const queryClient = useQueryClient();
+  const { user } = useFirebaseAuth();
+  
+  return useMutation({
+    mutationFn: (summaryId: string) => 
+      UserDailySummaryService.deleteDailySummary(user?.uid || '', summaryId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['firebase-all-daily-summaries'] });
+      queryClient.invalidateQueries({ queryKey: ['firebase-daily-summaries'] });
+    }
   });
 };
 

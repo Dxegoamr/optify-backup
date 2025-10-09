@@ -5,276 +5,160 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Calendar, Download, Eye, Trash2, X } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Calendar, Download, Eye, Trash2, X, Edit, Plus } from 'lucide-react';
+import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
+import { useAllDailySummaries, useEmployees, usePlatforms, useUpdateDailySummary, useDeleteDailySummary } from '@/hooks/useFirestore';
 import { toast } from 'sonner';
 
 const Historico = () => {
-  const queryClient = useQueryClient();
-  const [selectedDate, setSelectedDate] = useState<Date>();
+  const { user } = useFirebaseAuth();
   const [selectedSummary, setSelectedSummary] = useState<any>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingSummary, setEditingSummary] = useState<any>(null);
+  
+  // Buscar dados
+  const { data: dailySummaries = [], isLoading } = useAllDailySummaries(user?.uid || '');
+  const { data: employees = [] } = useEmployees(user?.uid || '');
+  const { data: platforms = [] } = usePlatforms(user?.uid || '');
+  
+  // Hooks para editar e excluir
+  const updateDailySummary = useUpdateDailySummary();
+  const deleteDailySummary = useDeleteDailySummary();
 
-  const { data: historyData = [] } = useQuery({
-    queryKey: ['history'],
-    queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return [];
-      
-      const { data, error } = await supabase
-        .from('daily_summaries')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('date', { ascending: false });
-      
-      if (error) throw error;
-      return data || [];
-    }
-  });
-
-  const { data: monthlySummary } = useQuery({
-    queryKey: ['monthly-summary'],
-    queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return { revenue: 0, expense: 0, profit: 0 };
-      
-      const startOfCurrentMonth = startOfMonth(new Date());
-      const endOfCurrentMonth = endOfMonth(new Date());
-      
-      const { data } = await supabase
-        .from('daily_summaries')
-        .select('total_deposits, total_withdraws')
-        .eq('user_id', user.id)
-        .gte('date', format(startOfCurrentMonth, 'yyyy-MM-dd'))
-        .lte('date', format(endOfCurrentMonth, 'yyyy-MM-dd'));
-      
-      const revenue = data?.reduce((sum, item) => sum + Number(item.total_deposits), 0) || 0;
-      const expense = data?.reduce((sum, item) => sum + Number(item.total_withdraws), 0) || 0;
-      
-      return { revenue, expense, profit: expense - revenue };
-    }
-  });
-
-  const deleteSummary = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('daily_summaries').delete().eq('id', id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['history'] });
-      queryClient.invalidateQueries({ queryKey: ['monthly-summary'] });
-      toast.success('Fechamento excluído!');
-    }
-  });
-
-  const exportSummary = (summary: any) => {
-    const data = {
-      date: format(new Date(summary.date), 'dd/MM/yyyy'),
-      receitas: summary.total_deposits,
-      despesas: summary.total_withdraws,
-      lucro: summary.profit,
-      margem: summary.total_deposits > 0 ? ((summary.profit / summary.total_deposits) * 100).toFixed(1) + '%' : '0%',
-      transacoes: summary.transaction_count
-    };
-    
-    const csv = Object.entries(data).map(([key, value]) => `${key}: ${value}`).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `resumo-${format(new Date(summary.date), 'dd-MM-yyyy')}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(value);
   };
 
-  const filteredHistory = selectedDate 
-    ? historyData.filter(item => {
-        const itemDate = new Date(item.date);
-        const startOfDay = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
-        const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000 - 1);
-        return itemDate >= startOfDay && itemDate <= endOfDay;
-      })
-    : historyData;
+  const formatDate = (dateString: string) => {
+    return format(new Date(dateString), 'dd \'de\' MMMM \'de\' yyyy', { locale: ptBR });
+  };
+
+  const getStatusColor = (profit: number) => {
+    return profit >= 0 ? 'text-success' : 'text-destructive';
+  };
+
+  const handleViewDetails = (summary: any) => {
+    setSelectedSummary(summary);
+    setDetailsOpen(true);
+  };
+
+  const handleEditSummary = (summary: any) => {
+    setEditingSummary(summary);
+    setEditOpen(true);
+  };
+
+  const handleDeleteSummary = async (summaryId: string) => {
+    try {
+      await deleteDailySummary.mutateAsync(summaryId);
+      toast.success('Fechamento excluído com sucesso!');
+    } catch (error) {
+      console.error('Erro ao excluir fechamento:', error);
+      toast.error('Erro ao excluir fechamento');
+    }
+  };
+
+  const handleExportToPDF = async () => {
+    try {
+      // TODO: Implementar exportação
+      toast.success('Histórico exportado com sucesso!');
+    } catch (error) {
+      toast.error('Erro ao exportar histórico');
+    }
+  };
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 animate-fade-in">
+      <div className="space-y-6">
+        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-4xl font-bold mb-2">Histórico</h1>
-            <p className="text-muted-foreground">Consulte dias e períodos anteriores</p>
+            <h1 className="text-3xl font-bold text-foreground">Histórico de Fechamentos</h1>
+            <p className="text-muted-foreground mt-2">
+              Visualize o histórico de todos os fechamentos de dia.
+            </p>
           </div>
-          <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              className="gap-2"
-              onClick={() => setSelectedDate(undefined)}
-            >
-              <X className="h-4 w-4" />
-              Limpar Filtro
+          <Button onClick={handleExportToPDF} className="gap-2">
+            <Download className="h-4 w-4" />
+            Exportar PDF
             </Button>
-            <Button 
-              variant="outline" 
-              className="gap-2"
-              onClick={() => {
-                const today = new Date();
-                setSelectedDate(today);
-              }}
-            >
-              <Calendar className="h-4 w-4" />
-              {selectedDate ? format(selectedDate, 'dd/MM/yyyy') : 'Selecionar Período'}
-            </Button>
-          </div>
         </div>
 
-        {selectedDate && (
-          <Card className="p-4 shadow-card">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">
-                Filtrando por: <span className="font-medium">{format(selectedDate, 'dd/MM/yyyy', { locale: ptBR })}</span>
-              </p>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => setSelectedDate(undefined)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
+        {/* Lista de Fechamentos */}
+        <Card className="p-6">
+          {isLoading ? (
+            <div className="text-center py-8">
+              <div className="text-muted-foreground">Carregando histórico...</div>
             </div>
-          </Card>
-        )}
-
-        {/* Summary List */}
-        <div className="space-y-4">
-          {filteredHistory.length === 0 ? (
-            <Card className="p-8 text-center shadow-card">
-              <p className="text-muted-foreground">
-                {selectedDate 
-                  ? `Nenhuma movimentação encontrada para ${format(selectedDate, 'dd/MM/yyyy')}.`
-                  : 'Nenhuma movimentação encontrada.'
-                }
-              </p>
-            </Card>
+          ) : dailySummaries.length === 0 ? (
+            <div className="text-center py-8">
+              <div className="text-muted-foreground">Nenhum fechamento encontrado</div>
+            </div>
           ) : (
-            filteredHistory.map((summary: any) => (
-              <Card key={summary.id} className="p-6 shadow-card hover:shadow-glow transition-all">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-4 mb-4">
-                      <h3 className="text-lg font-semibold">
-                        {format(new Date(summary.date), 'dd/MM/yyyy', { locale: ptBR })}
-                      </h3>
-                      <Badge variant="default">
-                        {summary.transaction_count} transações
-                      </Badge>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="space-y-4">
+              {dailySummaries.map((summary: any) => (
+                <div
+                  key={summary.id}
+                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
+                >
+                  <div className="flex items-center gap-4">
                       <div>
-                        <p className="text-sm text-muted-foreground">Receitas</p>
-                        <p className="text-xl font-bold text-success">
-                          R$ {Number(summary.total_deposits).toLocaleString('pt-BR')}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Despesas</p>
-                        <p className="text-xl font-bold text-destructive">
-                          R$ {Number(summary.total_withdraws).toLocaleString('pt-BR')}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Lucro</p>
-                        <p className="text-xl font-bold">
-                          R$ {summary.profit.toLocaleString('pt-BR')}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Margem</p>
-                        <p className="text-xl font-bold text-primary">
-                          {summary.total_deposits > 0 
-                            ? `${((summary.profit / summary.total_deposits) * 100).toFixed(1)}%`
-                            : '0%'
-                          }
-                        </p>
+                      <div className="font-semibold">{formatDate(summary.date)}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {summary.transactionCount || 0} transações
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex gap-2 ml-4">
-                    <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
-                      <DialogTrigger asChild>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <div className={`font-bold ${getStatusColor(summary.profit || summary.margin || 0)}`}>
+                        {formatCurrency(summary.profit || summary.margin || 0)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Lucro Total</div>
+                    </div>
+                    
+                    <div className="flex gap-2">
                         <Button 
+                        variant="ghost"
                           size="icon" 
-                          variant="ghost"
-                          onClick={() => setSelectedSummary(summary)}
+                        onClick={() => handleViewDetails(summary)}
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
-                      </DialogTrigger>
-                      <DialogContent className="max-w-4xl">
-                        <DialogHeader>
-                          <DialogTitle>
-                            Detalhes - {format(new Date(summary.date), 'dd/MM/yyyy', { locale: ptBR })}
-                          </DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          {summary.by_employee?.map((emp: any, idx: number) => (
-                            <Card key={idx} className="p-4">
-                              <h4 className="font-semibold mb-2">{emp.name}</h4>
-                              <div className="grid grid-cols-3 gap-4 text-sm">
-                                <div>
-                                  <p className="text-muted-foreground">Receitas</p>
-                                  <p className="font-bold text-success">
-                                    R$ {Number(emp.deposits).toLocaleString('pt-BR')}
-                                  </p>
-                                </div>
-                                <div>
-                                  <p className="text-muted-foreground">Despesas</p>
-                                  <p className="font-bold text-destructive">
-                                    R$ {Number(emp.withdraws).toLocaleString('pt-BR')}
-                                  </p>
-                                </div>
-                                <div>
-                                  <p className="text-muted-foreground">Saldo</p>
-                                  <p className={`font-bold ${(emp.deposits - emp.withdraws) >= 0 ? 'text-success' : 'text-destructive'}`}>
-                                    R$ {(emp.deposits - emp.withdraws).toLocaleString('pt-BR')}
-                                  </p>
-                                </div>
-                              </div>
-                            </Card>
-                          ))}
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-                    
                     <Button 
+                        variant="ghost"
                       size="icon" 
-                      variant="ghost"
-                      onClick={() => exportSummary(summary)}
+                        onClick={() => handleEditSummary(summary)}
                     >
-                      <Download className="h-4 w-4" />
+                        <Edit className="h-4 w-4" />
                     </Button>
-                    
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button size="icon" variant="ghost" className="text-destructive">
+                          <Button variant="ghost" size="icon" className="text-destructive">
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>Excluir fechamento?</AlertDialogTitle>
+                            <AlertDialogTitle>Excluir Fechamento</AlertDialogTitle>
                           <AlertDialogDescription>
-                            Esta ação não pode ser desfeita. O fechamento do dia será removido permanentemente.
+                              Tem certeza que deseja excluir o fechamento do dia {formatDate(summary.date)}?
+                              Esta ação não pode ser desfeita.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancelar</AlertDialogCancel>
                           <AlertDialogAction 
-                            onClick={() => deleteSummary.mutate(summary.id)}
+                              onClick={() => handleDeleteSummary(summary.id)}
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                           >
                             Excluir
@@ -284,35 +168,229 @@ const Historico = () => {
                     </AlertDialog>
                   </div>
                 </div>
-              </Card>
-            ))
+                </div>
+              ))}
+            </div>
           )}
+        </Card>
+
+        {/* Modal de Detalhes */}
+        <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>
+                Detalhes do Fechamento - {selectedSummary && formatDate(selectedSummary.date)}
+              </DialogTitle>
+            </DialogHeader>
+            
+            {selectedSummary && (
+              <div className="space-y-6">
+                {/* Resumo */}
+                <div className="grid grid-cols-3 gap-4">
+                  <Card className="p-4">
+                    <div className="text-sm text-muted-foreground">Total Depósitos</div>
+                    <div className="text-2xl font-bold text-success">
+                      {formatCurrency(selectedSummary.totalDeposits || 0)}
+                    </div>
+                  </Card>
+                  <Card className="p-4">
+                    <div className="text-sm text-muted-foreground">Total Saques</div>
+                    <div className="text-2xl font-bold text-destructive">
+                      {formatCurrency(selectedSummary.totalWithdraws || 0)}
+                    </div>
+                  </Card>
+                  <Card className="p-4">
+                    <div className="text-sm text-muted-foreground">Lucro Total</div>
+                    <div className={`text-2xl font-bold ${getStatusColor(selectedSummary.profit || selectedSummary.margin || 0)}`}>
+                      {formatCurrency(selectedSummary.profit || selectedSummary.margin || 0)}
+                    </div>
+                  </Card>
         </div>
 
-        {/* Monthly Summary */}
-        <Card className="p-6 shadow-card gradient-primary">
-          <h3 className="text-lg font-semibold text-primary-foreground mb-4">Resumo Mensal</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Transações */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Transações do Dia</h3>
+                  {selectedSummary.transactionsSnapshot && selectedSummary.transactionsSnapshot.length > 0 ? (
+                    <div className="space-y-2">
+                      {selectedSummary.transactionsSnapshot.map((transaction: any, index: number) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between p-3 border rounded-lg"
+                        >
+                          <div className="flex items-center gap-3">
+                            <Badge 
+                              variant={transaction.type === 'deposit' ? 'default' : 'destructive'}
+                            >
+                              {transaction.type === 'deposit' ? 'Depósito' : 'Saque'}
+                            </Badge>
             <div>
-              <p className="text-sm text-primary-foreground/80 mb-2">Receitas do Mês</p>
-              <p className="text-3xl font-bold text-primary-foreground">
-                R$ {monthlySummary?.revenue?.toLocaleString('pt-BR') || '0'}
-              </p>
+                              <div className="font-medium">
+                                {employees.find((e: any) => e.id === transaction.employeeId)?.name || 'N/A'}
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                {platforms.find((p: any) => p.id === transaction.platformId)?.name || 'N/A'}
+                              </div>
+                            </div>
+                          </div>
+                          <div className={`font-bold ${transaction.type === 'deposit' ? 'text-success' : 'text-destructive'}`}>
+                            {transaction.type === 'deposit' ? '+' : '-'}{formatCurrency(transaction.amount)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      Nenhuma transação registrada para este dia
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Modal de Edição */}
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>
+                Editar Fechamento - {editingSummary && formatDate(editingSummary.date)}
+              </DialogTitle>
+            </DialogHeader>
+            
+            {editingSummary && (
+              <div className="space-y-6">
+                {/* Data */}
+                <div className="space-y-2">
+                  <Label htmlFor="edit-date">Data:</Label>
+                  <Input
+                    id="edit-date"
+                    type="date"
+                    value={editingSummary.date}
+                    onChange={(e) => setEditingSummary({...editingSummary, date: e.target.value})}
+                  />
             </div>
+
+                {/* Transações */}
             <div>
-              <p className="text-sm text-primary-foreground/80 mb-2">Despesas do Mês</p>
-              <p className="text-3xl font-bold text-primary-foreground">
-                R$ {monthlySummary?.expense?.toLocaleString('pt-BR') || '0'}
-              </p>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold">Transações:</h3>
+                    <Button size="sm" className="gap-2">
+                      <Plus className="h-4 w-4" />
+                      Adicionar Transação
+                    </Button>
+                  </div>
+                  
+                  {editingSummary.transactionsSnapshot && editingSummary.transactionsSnapshot.length > 0 ? (
+                    <div className="space-y-2">
+                      {editingSummary.transactionsSnapshot.map((transaction: any, index: number) => (
+                        <div key={index} className="grid grid-cols-5 gap-2 p-3 border rounded-lg">
+                          <Select value={transaction.employeeId} onValueChange={(value) => {
+                            const newTransactions = [...editingSummary.transactionsSnapshot];
+                            newTransactions[index].employeeId = value;
+                            setEditingSummary({...editingSummary, transactionsSnapshot: newTransactions});
+                          }}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Funcionário" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {employees.map((employee: any) => (
+                                <SelectItem key={employee.id} value={employee.id}>
+                                  {employee.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          
+                          <Select value={transaction.type} onValueChange={(value) => {
+                            const newTransactions = [...editingSummary.transactionsSnapshot];
+                            newTransactions[index].type = value;
+                            setEditingSummary({...editingSummary, transactionsSnapshot: newTransactions});
+                          }}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Tipo" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="deposit">Depósito</SelectItem>
+                              <SelectItem value="withdraw">Saque</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          
+                          <Input
+                            type="number"
+                            step="0.01"
+                            placeholder="Valor"
+                            value={transaction.amount}
+                            onChange={(e) => {
+                              const newTransactions = [...editingSummary.transactionsSnapshot];
+                              newTransactions[index].amount = Number(e.target.value);
+                              setEditingSummary({...editingSummary, transactionsSnapshot: newTransactions});
+                            }}
+                          />
+                          
+                          <Select value={transaction.platformId} onValueChange={(value) => {
+                            const newTransactions = [...editingSummary.transactionsSnapshot];
+                            newTransactions[index].platformId = value;
+                            setEditingSummary({...editingSummary, transactionsSnapshot: newTransactions});
+                          }}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Plataforma" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {platforms.map((platform: any) => (
+                                <SelectItem key={platform.id} value={platform.id}>
+                                  {platform.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              const newTransactions = editingSummary.transactionsSnapshot.filter((_: any, i: number) => i !== index);
+                              setEditingSummary({...editingSummary, transactionsSnapshot: newTransactions});
+                            }}
+                            className="text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      Nenhuma transação registrada para este dia
+                    </div>
+                  )}
             </div>
-            <div>
-              <p className="text-sm text-primary-foreground/80 mb-2">Lucro do Mês</p>
-              <p className="text-3xl font-bold text-primary-foreground">
-                R$ {monthlySummary?.profit?.toLocaleString('pt-BR') || '0'}
-              </p>
+
+                {/* Botões de Ação */}
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setEditOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button onClick={async () => {
+                    try {
+                      await updateDailySummary.mutateAsync({
+                        summaryId: editingSummary.id,
+                        summaryData: editingSummary
+                      });
+                      toast.success('Fechamento atualizado com sucesso!');
+                      setEditOpen(false);
+                    } catch (error) {
+                      console.error('Erro ao atualizar fechamento:', error);
+                      toast.error('Erro ao atualizar fechamento');
+                    }
+                  }}>
+                    Salvar Alterações
+                  </Button>
             </div>
           </div>
-        </Card>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

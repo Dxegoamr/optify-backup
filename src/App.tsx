@@ -19,7 +19,6 @@ import ResumoDia from "./pages/ResumoDia";
 import Saldos from "./pages/Saldos";
 import Relatorios from "./pages/Relatorios";
 import Historico from "./pages/Historico";
-import HistoricoDiario from "./pages/HistoricoDiario";
 import Planos from "./pages/Planos";
 import Admin from "./pages/Admin";
 import Afiliados from "./pages/Afiliados";
@@ -55,7 +54,6 @@ const App = () => (
             <Route path="/saldos" element={<ProtectedRoute><Saldos /></ProtectedRoute>} />
             <Route path="/relatorios" element={<ProtectedRoute><Relatorios /></ProtectedRoute>} />
             <Route path="/historico" element={<ProtectedRoute><Historico /></ProtectedRoute>} />
-            <Route path="/historico-diario" element={<ProtectedRoute><HistoricoDiario /></ProtectedRoute>} />
             <Route path="/planos" element={<ProtectedRoute><Planos /></ProtectedRoute>} />
             <Route path="/afiliados" element={<ProtectedRoute><Afiliados /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />

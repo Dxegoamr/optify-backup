@@ -30,7 +30,10 @@ export const configureTimezone = () => {
  * Obtém a data atual no fuso horário de São Paulo
  */
 export const getCurrentDateInSaoPaulo = (): Date => {
-  return new Date(new Date().toLocaleString('en-US', { timeZone: DEFAULT_TIMEZONE }));
+  const now = new Date();
+  // Obter a data atual no fuso horário de São Paulo
+  const saoPauloDate = new Date(now.toLocaleString('en-US', { timeZone: DEFAULT_TIMEZONE }));
+  return saoPauloDate;
 };
 
 /**
@@ -64,8 +67,16 @@ export const formatDateTimeInSaoPaulo = (date: Date, options?: Intl.DateTimeForm
  * Obtém a data atual como string no formato YYYY-MM-DD no fuso horário de São Paulo
  */
 export const getCurrentDateStringInSaoPaulo = (): string => {
-  const date = getCurrentDateInSaoPaulo();
-  return date.toISOString().split('T')[0];
+  const now = new Date();
+  // Usar o fuso horário de São Paulo para obter a data correta
+  const saoPauloDate = new Date(now.toLocaleString('en-US', { timeZone: DEFAULT_TIMEZONE }));
+  
+  // Formatar como YYYY-MM-DD
+  const year = saoPauloDate.getFullYear();
+  const month = String(saoPauloDate.getMonth() + 1).padStart(2, '0');
+  const day = String(saoPauloDate.getDate()).padStart(2, '0');
+  
+  return `${year}-${month}-${day}`;
 };
 
 /**

@@ -7,7 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { TrendingUp, TrendingDown, Calendar as CalendarIcon, ArrowUp, ArrowDown, Target, Trophy, Lock, Filter, X } from 'lucide-react';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
 import { useEmployees, useTransactions, usePlatforms, useDeleteTransaction } from '@/hooks/useFirestore';
-import { getCurrentDateInSaoPaulo, formatDateInSaoPaulo } from '@/utils/timezone';
+import { useQueryClient } from '@tanstack/react-query';
+import { getCurrentDateInSaoPaulo, formatDateInSaoPaulo, getCurrentDateStringInSaoPaulo } from '@/utils/timezone';
 import { UserDailySummaryService } from '@/core/services/user-specific.service';
 import { toast } from 'sonner';
 import { Calendar } from '@/components/ui/calendar';
@@ -22,14 +23,18 @@ const ResumoDia = () => {
   const { user } = useFirebaseAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [selectedDate, setSelectedDate] = useState<Date>(getCurrentDateInSaoPaulo());
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const [saveToAnotherDateDialogOpen, setSaveToAnotherDateDialogOpen] = useState(false);
+  const [originalDayTransactions, setOriginalDayTransactions] = useState<any[]>([]);
+  const [originalDayDate, setOriginalDayDate] = useState<string>('');
   const [activeFilter, setActiveFilter] = useState<string>('');
   const [platformFilter, setPlatformFilter] = useState<string>('');
   const [employeeFilter, setEmployeeFilter] = useState<string>('');
   
-  const selectedDateString = selectedDate.toISOString().split('T')[0];
+  const selectedDateString = selectedDate.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }).split('/').reverse().join('-');
   
   // Processar filtro da URL
   useEffect(() => {
@@ -44,8 +49,36 @@ const ResumoDia = () => {
   // Buscar dados do Firebase
   const { data: employees = [] } = useEmployees(user?.uid || '');
   const { data: platforms = [] } = usePlatforms(user?.uid || '');
-  const { data: todayTransactions = [] } = useTransactions(user?.uid || '', selectedDateString, selectedDateString);
+  const { data: allTransactions = [] } = useTransactions(user?.uid || '');
   const deleteTransactionMutation = useDeleteTransaction();
+  
+  // Filtrar transações do dia selecionado
+  const todayTransactions = allTransactions.filter((transaction: any) => {
+    console.log('Comparando:', transaction.date, '===', selectedDateString, '?', transaction.date === selectedDateString);
+    return transaction.date === selectedDateString;
+  });
+  
+  console.log('ResumoDia - selectedDateString:', selectedDateString);
+  console.log('ResumoDia - allTransactions:', allTransactions);
+  console.log('ResumoDia - allTransactions dates:', allTransactions.map((t: any) => ({ id: t.id, date: t.date, type: t.type, amount: t.amount })));
+  console.log('ResumoDia - todayTransactions (filtradas):', todayTransactions);
+  
+  // Capturar transações do dia original quando a página carrega
+  useEffect(() => {
+    if (allTransactions.length > 0 && originalDayTransactions.length === 0) {
+      const originalDate = getCurrentDateStringInSaoPaulo();
+      const originalTransactions = allTransactions.filter((transaction: any) => {
+        return transaction.date === originalDate;
+      });
+      
+      if (originalTransactions.length > 0) {
+        setOriginalDayTransactions(originalTransactions);
+        setOriginalDayDate(originalDate);
+        console.log('ResumoDia - Transações do dia original capturadas:', originalTransactions);
+        console.log('ResumoDia - Data original:', originalDate);
+      }
+    }
+  }, [allTransactions, originalDayTransactions.length]);
 
   // Filtrar transações baseado nos filtros ativos
   const getFilteredTransactions = () => {
@@ -88,6 +121,14 @@ const ResumoDia = () => {
   const totalWithdraws = withdraws.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
   const profit = totalWithdraws - totalDeposits;
   const transactionCount = filteredTransactions.length;
+  
+  console.log('ResumoDia - Cálculos:');
+  console.log('- deposits:', deposits);
+  console.log('- withdraws:', withdraws);
+  console.log('- totalDeposits:', totalDeposits);
+  console.log('- totalWithdraws:', totalWithdraws);
+  console.log('- profit:', profit);
+  console.log('- transactionCount:', transactionCount);
 
   // Calcular estatísticas por plataforma
   const platformStats = platforms.map((platform: any) => {
@@ -137,27 +178,73 @@ const ResumoDia = () => {
   // Função para fechar o dia
   const handleCloseDay = async () => {
     try {
+      // CORREÇÃO: Usar transações do dia original se disponíveis
+      const transactionsToClose = originalDayTransactions.length > 0 ? originalDayTransactions : todayTransactions;
+      const dateToClose = originalDayDate || selectedDateString;
+      
+      const depositsToClose = transactionsToClose.filter((t: any) => t.type === 'deposit');
+      const withdrawsToClose = transactionsToClose.filter((t: any) => t.type === 'withdraw');
+      const totalDepositsToClose = depositsToClose.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+      const totalWithdrawsToClose = withdrawsToClose.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+      const profitToClose = totalWithdrawsToClose - totalDepositsToClose;
+      
+      console.log('Fechando dia - Data:', dateToClose);
+      console.log('Fechando dia - Transações originais:', originalDayTransactions);
+      console.log('Fechando dia - Transações selecionadas:', transactionsToClose);
+      console.log('Fechando dia - Total Deposits:', totalDepositsToClose);
+      console.log('Fechando dia - Total Withdraws:', totalWithdrawsToClose);
+      console.log('Fechando dia - Profit:', profitToClose);
+      
       if (!user?.uid) {
         toast.error('Usuário não autenticado');
         return;
       }
 
-      // Salvar resumo no Firestore (subcoleção do usuário)
-      await UserDailySummaryService.createDailySummary(user.uid, {
-        date: selectedDateString,
-        totalDeposits,
-        totalWithdraws,
-        profit,
-        transactionCount,
-        transactionsSnapshot: todayTransactions,
+      // Verificar se já existe um fechamento para este dia
+      const existingSummaries = await UserDailySummaryService.getAllDailySummaries(user.uid);
+      const existingSummary = existingSummaries.find((s: any) => s.date === dateToClose);
+      
+      let summaryData;
+      
+      if (existingSummary) {
+        // Se já existe, somar aos valores existentes
+        summaryData = {
+          date: dateToClose,
+          totalDeposits: (existingSummary.totalDeposits || 0) + totalDepositsToClose,
+          totalWithdraws: (existingSummary.totalWithdraws || 0) + totalWithdrawsToClose,
+          profit: (existingSummary.profit || existingSummary.margin || 0) + profitToClose,
+          transactionCount: (existingSummary.transactionCount || 0) + transactionsToClose.length,
+          transactionsSnapshot: [...(existingSummary.transactionsSnapshot || []), ...transactionsToClose],
+          byEmployee: [],
+          margin: (existingSummary.profit || existingSummary.margin || 0) + profitToClose,
+          createdAt: existingSummary.createdAt,
+          updatedAt: new Date(),
+        };
+        
+        console.log('Atualizando fechamento existente:', summaryData);
+        // CORREÇÃO: Usar update em vez de create para evitar duplicação
+        await UserDailySummaryService.updateDailySummary(user.uid, existingSummary.id, summaryData);
+      } else {
+        // Se não existe, criar novo
+        summaryData = {
+        date: dateToClose,
+        totalDeposits: totalDepositsToClose,
+        totalWithdraws: totalWithdrawsToClose,
+        profit: profitToClose,
+        transactionCount: transactionsToClose.length,
+        transactionsSnapshot: transactionsToClose,
         byEmployee: [],
-        margin: undefined,
+          margin: profitToClose,
         createdAt: new Date(),
         updatedAt: new Date(),
-      } as any);
+        };
+        
+        console.log('Criando novo fechamento:', summaryData);
+        await UserDailySummaryService.createDailySummary(user.uid, summaryData as any);
+      }
       
       // Deletar todas as transações do dia
-      const deletePromises = todayTransactions.map((transaction: any) => 
+      const deletePromises = transactionsToClose.map((transaction: any) => 
         deleteTransactionMutation.mutateAsync(transaction.id)
       );
       await Promise.all(deletePromises);
@@ -178,29 +265,96 @@ const ResumoDia = () => {
   // Função para salvar em outra data
   const handleSaveToAnotherDate = async (targetDate: Date) => {
     try {
+      console.log('=== INICIANDO SALVAMENTO EM OUTRA DATA ===');
+      console.log('Target Date recebida:', targetDate);
+      console.log('Transações do dia original:', originalDayTransactions);
+      console.log('Data original:', originalDayDate);
+      console.log('Transações do dia atual (selectedDate):', todayTransactions);
+      console.log('Total Deposits:', totalDeposits);
+      console.log('Total Withdraws:', totalWithdraws);
+      console.log('Profit calculado:', profit);
+      
       if (!user?.uid) {
         toast.error('Usuário não autenticado');
         return;
       }
 
-      const targetDateString = targetDate.toISOString().split('T')[0];
+      const targetDateString = targetDate.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }).split('/').reverse().join('-');
+      console.log('Salvando em outra data - Target Date String:', targetDateString);
       
-      // Criar resumo do dia para a data selecionada
-      // Salvar resumo no Firestore para outra data (subcoleção do usuário)
-      await UserDailySummaryService.createDailySummary(user.uid, {
+      // CORREÇÃO: Usar as transações do dia original, não do dia selecionado
+      const transactionsToSave = originalDayTransactions.length > 0 ? originalDayTransactions : todayTransactions;
+      const depositsToSave = transactionsToSave.filter((t: any) => t.type === 'deposit');
+      const withdrawsToSave = transactionsToSave.filter((t: any) => t.type === 'withdraw');
+      const totalDepositsToSave = depositsToSave.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+      const totalWithdrawsToSave = withdrawsToSave.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+      const profitToSave = totalWithdrawsToSave - totalDepositsToSave;
+      
+      console.log('Dados a serem salvos:');
+      console.log('- transactionsToSave:', transactionsToSave);
+      console.log('- totalDepositsToSave:', totalDepositsToSave);
+      console.log('- totalWithdrawsToSave:', totalWithdrawsToSave);
+      console.log('- profitToSave:', profitToSave);
+      
+      // Verificar se já existe um fechamento para esta data
+      const existingSummaries = await UserDailySummaryService.getAllDailySummaries(user.uid);
+      const existingSummary = existingSummaries.find((s: any) => s.date === targetDateString);
+      
+      let summaryDataForDate;
+      
+      if (existingSummary) {
+        // Se já existe, somar aos valores existentes
+        summaryDataForDate = {
+          date: targetDateString,
+          totalDeposits: (existingSummary.totalDeposits || 0) + totalDepositsToSave,
+          totalWithdraws: (existingSummary.totalWithdraws || 0) + totalWithdrawsToSave,
+          profit: (existingSummary.profit || existingSummary.margin || 0) + profitToSave,
+          transactionCount: (existingSummary.transactionCount || 0) + transactionsToSave.length,
+          transactionsSnapshot: [...(existingSummary.transactionsSnapshot || []), ...transactionsToSave],
+          byEmployee: [],
+          margin: (existingSummary.profit || existingSummary.margin || 0) + profitToSave,
+          createdAt: existingSummary.createdAt,
+          updatedAt: new Date(),
+        };
+        
+        console.log('Atualizando fechamento existente para data:', summaryDataForDate);
+        // CORREÇÃO: Usar update em vez de create para evitar duplicação
+        await UserDailySummaryService.updateDailySummary(user.uid, existingSummary.id, summaryDataForDate);
+      } else {
+        // Se não existe, criar novo
+        summaryDataForDate = {
         date: targetDateString,
-        totalDeposits,
-        totalWithdraws,
-        profit,
-        transactionCount,
-        transactionsSnapshot: todayTransactions,
+        totalDeposits: totalDepositsToSave,
+        totalWithdraws: totalWithdrawsToSave,
+        profit: profitToSave,
+        transactionCount: transactionsToSave.length,
+        transactionsSnapshot: transactionsToSave,
         byEmployee: [],
-        margin: undefined,
+          margin: profitToSave,
         createdAt: new Date(),
         updatedAt: new Date(),
-      } as any);
+        };
+        
+        console.log('Criando novo fechamento para data:', summaryDataForDate);
+        await UserDailySummaryService.createDailySummary(user.uid, summaryDataForDate as any);
+      }
+      console.log('Resumo salvo com sucesso na data:', targetDateString);
       
-      toast.success(`Resumo salvo para ${format(targetDate, "dd/MM/yyyy", { locale: pt })}!`);
+      // Deletar todas as transações do dia atual após salvar em outra data
+      console.log('Deletando transações do dia selecionado:', transactionsToSave);
+      const deletePromises = transactionsToSave.map((transaction: any) => {
+        console.log('Deletando transação:', transaction.id);
+        return deleteTransactionMutation.mutateAsync(transaction.id);
+      });
+      await Promise.all(deletePromises);
+      console.log('Todas as transações foram deletadas com sucesso');
+      
+      // Invalidar queries para atualizar a interface
+      queryClient.invalidateQueries({ queryKey: ['firebase-transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['firebase-all-daily-summaries'] });
+      queryClient.invalidateQueries({ queryKey: ['firebase-daily-summaries'] });
+      
+      toast.success(`Resumo salvo para ${format(targetDate, "dd/MM/yyyy", { locale: pt })}! Transações do dia atual foram apagadas.`);
       setCalendarOpen(false);
     } catch (error) {
       console.error('Erro ao salvar em outra data:', error);
@@ -256,13 +410,45 @@ const ResumoDia = () => {
                   selected={selectedDate}
                   onSelect={(date) => {
                     if (date) {
-                      handleSaveToAnotherDate(date);
+                      setSelectedDate(date);
+                      setCalendarOpen(false);
+                      setSaveToAnotherDateDialogOpen(true);
                     }
                   }}
                   initialFocus
                 />
               </PopoverContent>
             </Popover>
+            
+            <AlertDialog open={saveToAnotherDateDialogOpen} onOpenChange={setSaveToAnotherDateDialogOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Salvar em Outra Data</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Tem certeza que deseja salvar o resumo do dia atual para {selectedDate && format(selectedDate, "dd/MM/yyyy", { locale: pt })}?
+                    <br /><br />
+                    <strong>Esta ação irá:</strong>
+                    <br />• Salvar todas as transações atuais para a data selecionada
+                    <br />• Apagar todas as transações do dia atual
+                    <br />• Permitir que você comece um novo dia
+                    <br /><br />
+                    <strong>Esta ação não pode ser desfeita.</strong>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={async () => {
+                    if (selectedDate) {
+                      console.log('Executando saveToAnotherDate com data:', selectedDate);
+                      await handleSaveToAnotherDate(selectedDate);
+                      setSaveToAnotherDateDialogOpen(false);
+                    }
+                  }}>
+                    Salvar e Apagar Transações
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
             
             <AlertDialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
               <AlertDialogTrigger asChild>

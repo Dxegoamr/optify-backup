@@ -103,7 +103,7 @@ const EmployeeFormModal = () => {
     }
 
     try {
-      await createEmployee.mutateAsync({
+      const employeeData = {
         userId: user.uid,
         name: formData.name.trim(),
         cpf: formData.cpf.trim() || '',
@@ -111,8 +111,11 @@ const EmployeeFormModal = () => {
         phone: formData.phone.trim() || '',
         birthDate: formData.birthDate || '',
         salary: formData.salary || 0,
-        status: 'active'
-      });
+        status: 'active' as const
+      };
+      
+      console.log('Criando funcionário com dados:', employeeData);
+      await createEmployee.mutateAsync(employeeData);
 
       toast.success('Funcionário cadastrado com sucesso!');
       setOpen(false);

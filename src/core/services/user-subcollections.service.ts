@@ -123,13 +123,17 @@ export class UserSubcollectionsService {
     data: Omit<T, 'id' | 'createdAt' | 'updatedAt'>
   ): Promise<string> {
     try {
+      console.log(`UserSubcollectionsService.addToUserSubcollection - salvando em ${subcollection}:`, { userId, data });
       const subcollectionRef = collection(db, this.usersCollection, userId, subcollection);
-      const docRef = await addDoc(subcollectionRef, {
+      const dataWithTimestamps = {
         ...data,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
-      });
+      };
+      console.log('Dados com timestamps:', dataWithTimestamps);
+      const docRef = await addDoc(subcollectionRef, dataWithTimestamps);
       
+      console.log(`Documento criado com ID: ${docRef.id}`);
       return docRef.id;
     } catch (error) {
       console.error(`Erro ao adicionar em ${subcollection}:`, error);

@@ -7,7 +7,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import MonthlyGoalCard from '@/components/dashboard/MonthlyGoalCard';
 import MonthlyCalendar from '@/components/dashboard/MonthlyCalendar';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
-import { useEmployees, useTransactions } from '@/hooks/useFirestore';
+import { useEmployees, useTransactions, useAllDailySummaries } from '@/hooks/useFirestore';
 import { getCurrentDateStringInSaoPaulo, getCurrentDateInSaoPaulo } from '@/utils/timezone';
 import { useDailyClosure } from '@/hooks/useDailyClosure';
 
@@ -23,9 +23,11 @@ const Dashboard = () => {
   const today = getCurrentDateStringInSaoPaulo();
   const sevenDaysAgo = new Date(getCurrentDateInSaoPaulo().getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   const firstDayOfMonth = new Date(getCurrentDateInSaoPaulo().getFullYear(), getCurrentDateInSaoPaulo().getMonth(), 1).toISOString().split('T')[0];
+  const lastDayOfMonth = new Date(getCurrentDateInSaoPaulo().getFullYear(), getCurrentDateInSaoPaulo().getMonth() + 1, 0).toISOString().split('T')[0];
   const { data: todayTransactions = [], isLoading: transactionsLoading, error: transactionsError } = useTransactions(user?.uid || '', today, today);
   const { data: recentTransactions = [], isLoading: recentTransactionsLoading } = useTransactions(user?.uid || '', sevenDaysAgo, today);
-  const { data: monthlyTransactions = [], isLoading: monthlyTransactionsLoading } = useTransactions(user?.uid || '', firstDayOfMonth, today);
+  const { data: monthlyTransactions = [], isLoading: monthlyTransactionsLoading } = useTransactions(user?.uid || '', firstDayOfMonth, lastDayOfMonth);
+  const { data: dailySummaries = [] } = useAllDailySummaries(user?.uid || '');
   // Onboarding notification removida conforme solicitado
   
   // Debug temporário
@@ -53,6 +55,65 @@ const Dashboard = () => {
   const activeEmployees = employees?.filter(e => e.status === 'active') || [];
   const transactionCount = todayTransactions?.length || 0;
   
+  // Calcular receita mensal
+  const currentYear = getCurrentDateInSaoPaulo().getFullYear();
+  const currentMonth = getCurrentDateInSaoPaulo().getMonth();
+  
+  // Filtrar fechamentos diários do mês atual
+  const monthlySummaries = dailySummaries.filter((summary: any) => {
+    const summaryDate = new Date(summary.date);
+    return summaryDate.getFullYear() === currentYear && summaryDate.getMonth() === currentMonth;
+  });
+  
+  // Somar lucros dos fechamentos diários
+  const monthlyRevenueFromSummaries = monthlySummaries.reduce((total: number, summary: any) => {
+    return total + (summary.profit || summary.margin || 0);
+  }, 0);
+  
+  // Somar lucros das transações não fechadas do mês atual
+  // Filtrar apenas transações que NÃO estão em fechamentos diários
+  const closedDates = new Set(monthlySummaries.map((summary: any) => summary.date));
+  const openTransactions = monthlyTransactions.filter((transaction: any) => {
+    return !closedDates.has(transaction.date);
+  });
+  
+  const monthlyRevenueFromTransactions = openTransactions.reduce((total: number, transaction: any) => {
+    const transactionProfit = transaction.type === 'withdraw' ? transaction.amount : -transaction.amount;
+    return total + transactionProfit;
+  }, 0);
+  
+  console.log('Dashboard - Transações Abertas (não fechadas):', {
+    totalMonthlyTransactions: monthlyTransactions.length,
+    closedDates: Array.from(closedDates),
+    openTransactions: openTransactions.length,
+    monthlyRevenueFromTransactions
+  });
+  
+  const monthlyRevenue = monthlyRevenueFromSummaries + monthlyRevenueFromTransactions;
+  
+  console.log('Dashboard - Cálculo Receita Mensal:', {
+    currentYear,
+    currentMonth,
+    monthlySummaries: monthlySummaries.length,
+    monthlyRevenueFromSummaries,
+    monthlyTransactions: monthlyTransactions.length,
+    monthlyRevenueFromTransactions,
+    monthlyRevenue
+  });
+  
+  // Debug detalhado dos fechamentos diários
+  console.log('Dashboard - Fechamentos Diários Detalhados:');
+  monthlySummaries.forEach((summary: any, index: number) => {
+    console.log(`  ${index + 1}. Data: ${summary.date}, Profit: ${summary.profit || summary.margin || 0}`);
+  });
+  
+  // Debug detalhado das transações abertas
+  console.log('Dashboard - Transações Abertas Detalhadas:');
+  openTransactions.forEach((transaction: any, index: number) => {
+    const profit = transaction.type === 'withdraw' ? transaction.amount : -transaction.amount;
+    console.log(`  ${index + 1}. Data: ${transaction.date}, Tipo: ${transaction.type}, Valor: ${transaction.amount}, Profit: ${profit}`);
+  });
+  
   // Calcular meta mensal (exemplo: 10% dos funcionários ativos)
   const monthlyGoal = activeEmployees.length * 10000; // R$ 10k por funcionário ativo
 
@@ -67,9 +128,9 @@ const Dashboard = () => {
     },
     { 
       title: 'Receita do Mês', 
-      value: 'R$ 184.200,00', 
-      icon: TrendingUp,
-      valueColor: 'default' as const,
+      value: `R$ ${monthlyRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 
+      icon: monthlyRevenue >= 0 ? TrendingUp : TrendingDown,
+      valueColor: monthlyRevenue >= 0 ? 'positive' : 'negative' as 'positive' | 'negative',
       clickable: true,
       onClick: () => navigate('/relatorios')
     },

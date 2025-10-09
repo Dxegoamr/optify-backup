@@ -41,6 +41,20 @@ const Saldos = () => {
   console.log('Saldos - Employees:', employees.length);
   console.log('Saldos - Platforms:', platforms.length);
   console.log('Saldos - Transactions:', allTransactions.length);
+  console.log('Saldos - All Transactions:', allTransactions);
+  console.log('Saldos - Platforms IDs:', platforms.map((p: any) => ({ id: p.id, name: p.name })));
+  
+  // Debug: verificar se as transações têm platformId
+  allTransactions.forEach((t: any, index: number) => {
+    console.log(`Transaction ${index}:`, {
+      id: t.id,
+      employeeId: t.employeeId,
+      platformId: t.platformId,
+      type: t.type,
+      amount: t.amount,
+      date: t.date
+    });
+  });
 
   // Hooks para mutações
   const createPlatformMutation = useCreatePlatform();
@@ -60,10 +74,12 @@ const Saldos = () => {
         total: 0 
       };
       
-        platforms.forEach((plat: any) => {
+      platforms.forEach((plat: any) => {
         const empTransactions = allTransactions.filter(
           (t: any) => t.employeeId === emp.id && t.platformId === plat.id
         );
+        
+        console.log(`Debug - Employee: ${emp.name}, Platform: ${plat.name}, Transactions:`, empTransactions);
         
         const deposits = empTransactions
           .filter((t: any) => t.type === 'deposit')
@@ -73,16 +89,21 @@ const Saldos = () => {
           .filter((t: any) => t.type === 'withdraw')
           .reduce((s: number, t: any) => s + Number(t.amount || 0), 0);
         
-        const balance = Math.max(0, deposits - withdraws); // Nunca fica abaixo de zero
-          balances[emp.id].platforms[plat.id] = balance;
-          balances[emp.id].total += balance;
-        });
+        console.log(`Debug - Deposits: ${deposits}, Withdraws: ${withdraws}`);
+        
+        const balance = deposits - withdraws; // Saldo real (pode ser negativo)
+        balances[emp.id].platforms[plat.id] = Math.max(0, balance); // Exibir apenas valores positivos
+        balances[emp.id].total += Math.max(0, balance);
       });
+    });
 
-      return Object.values(balances);
+    return Object.values(balances);
   };
 
   const platformBalances = calculatePlatformBalances();
+  
+  // Debug: verificar saldos calculados
+  console.log('Saldos - Platform Balances:', platformBalances);
 
   // Ordenar funcionários alfabeticamente
   const sortedEmployees = [...employees].sort((a: any, b: any) => a.name.localeCompare(b.name));
@@ -261,6 +282,7 @@ const Saldos = () => {
         const colorUpdate = colorUpdates.find(c => c.name === platform.name);
         if (colorUpdate && platform.color !== colorUpdate.color) {
           return updatePlatformMutation.mutateAsync({
+            userId: user.uid,
             id: platform.id,
             data: { color: colorUpdate.color }
           });

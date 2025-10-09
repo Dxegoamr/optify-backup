@@ -1,50 +1,83 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
-import { useTransactions } from '@/hooks/useFirestore';
+import { useTransactions, useAllDailySummaries } from '@/hooks/useFirestore';
 import { getCurrentDateInSaoPaulo, formatDateInSaoPaulo } from '@/utils/timezone';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import DayTransactionsModal from './DayTransactionsModal';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isToday, isPast } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 const MonthlyCalendar = () => {
   const [currentDate, setCurrentDate] = useState(getCurrentDateInSaoPaulo());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const { user } = useFirebaseAuth();
 
-  // Buscar transações do mês atual
-  const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-  const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-  const startDate = firstDay.toISOString().split('T')[0];
-  const endDate = lastDay.toISOString().split('T')[0];
+  // Buscar histórico de dias fechados (como no Optify original)
+  const { data: historicalSummaries = [] } = useAllDailySummaries(user?.uid || '');
   
-  const { data: monthlyTransactions = [] } = useTransactions(user?.uid || '', startDate, endDate);
+  // Buscar todas as transações (não fechadas ainda)
+  const { data: allTransactions = [] } = useTransactions(user?.uid || '');
   
-  // Processar dados para o calendário
-  const dailySummaries = monthlyTransactions.reduce((acc: any[], transaction) => {
-    const date = transaction.date;
-    const existing = acc.find(item => item.summary_date === date);
+  // Debug logs
+  console.log('MonthlyCalendar - Historical Summaries:', historicalSummaries);
+  console.log('MonthlyCalendar - Historical Summaries length:', historicalSummaries?.length || 0);
+  console.log('MonthlyCalendar - All Transactions:', allTransactions);
+  console.log('MonthlyCalendar - All Transactions length:', allTransactions?.length || 0);
+  console.log('MonthlyCalendar - Current Date:', currentDate);
+  console.log('MonthlyCalendar - User ID:', user?.uid);
+  
+  // Calcular lucros diários usando Map (como no Optify original)
+  const dailyProfits = useMemo(() => {
+    const profits = new Map<string, number>();
     
-    if (existing) {
-      if (transaction.type === 'deposit') {
-        existing.total_deposits += transaction.amount;
+    console.log('Calculating daily profits...');
+    
+    // 1️⃣ PROCESSAR HISTÓRICO (dias fechados)
+    historicalSummaries.forEach((summary: any) => {
+      // Converter data para string "YYYY-MM-DD"
+      let dateKey: string;
+      
+      if (typeof summary.date === 'string') {
+        dateKey = summary.date;
+      } else if (summary.date && summary.date.toDate) {
+        // Firebase Timestamp
+        dateKey = format(summary.date.toDate(), 'yyyy-MM-dd');
       } else {
-        existing.total_withdraws += transaction.amount;
+        // Date object
+        dateKey = format(new Date(summary.date), 'yyyy-MM-dd');
       }
-      existing.profit = existing.total_withdraws - existing.total_deposits;
-    } else {
-      acc.push({
-        summary_date: date,
-        total_deposits: transaction.type === 'deposit' ? transaction.amount : 0,
-        total_withdraws: transaction.type === 'withdraw' ? transaction.amount : 0,
-        profit: transaction.type === 'deposit' ? -transaction.amount : transaction.amount
-      });
-    }
+      
+      console.log(`Adding historical profit for ${dateKey}: ${summary.profit || summary.margin}`);
+      profits.set(dateKey, summary.profit || summary.margin || 0);
+    });
     
-    return acc;
-  }, []);
+    // 2️⃣ PROCESSAR TODAS AS TRANSAÇÕES POR DIA (não fechadas ainda)
+    allTransactions.forEach((transaction: any) => {
+      const transactionDate = transaction.date;
+      console.log(`Processing transaction for date ${transactionDate}:`, transaction);
+      
+      // Calcular lucro desta transação
+      const transactionProfit = transaction.type === 'withdraw' ? transaction.amount : -transaction.amount;
+      
+      // Se já existe lucro para este dia, somar
+      if (profits.has(transactionDate)) {
+        const currentProfit = profits.get(transactionDate) || 0;
+        const newProfit = currentProfit + transactionProfit;
+        console.log(`Adding to existing profit for ${transactionDate}: ${currentProfit} + ${transactionProfit} = ${newProfit}`);
+        profits.set(transactionDate, newProfit);
+      } else {
+        // Se não existe, criar novo
+        console.log(`Creating new profit for ${transactionDate}: ${transactionProfit}`);
+        profits.set(transactionDate, transactionProfit);
+      }
+    });
+    
+    console.log('Final daily profits Map:', Array.from(profits.entries()));
+    return profits;
+  }, [historicalSummaries, allTransactions]);
 
   const monthNames = [
     'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -72,10 +105,16 @@ const MonthlyCalendar = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1));
   };
 
-  const getSummaryForDay = (day: number) => {
-    const dateStr = new Date(currentDate.getFullYear(), currentDate.getMonth(), day)
-      .toISOString().split('T')[0];
-    return dailySummaries.find(s => s.summary_date === dateStr);
+  const getProfitForDay = (day: number) => {
+    const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+    const dateStr = format(date, 'yyyy-MM-dd');
+    
+    console.log(`Looking for profit for day ${day}, date string: ${dateStr}`);
+    
+    const profit = dailyProfits.get(dateStr);
+    console.log(`Profit found for day ${day}:`, profit);
+    
+    return profit;
   };
 
   const handleDayClick = (day: number) => {
@@ -91,6 +130,19 @@ const MonthlyCalendar = () => {
             {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
           </h3>
           <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                console.log('=== DEBUG INFO ===');
+                console.log('User ID:', user?.uid);
+                console.log('Historical Summaries:', historicalSummaries);
+                console.log('All Transactions:', allTransactions);
+                console.log('Daily Profits Map:', Array.from(dailyProfits.entries()));
+                console.log('==================');
+              }}
+            >
+              Debug
+            </Button>
             <Button variant="outline" size="icon" onClick={previousMonth}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -113,7 +165,7 @@ const MonthlyCalendar = () => {
 
           {Array.from({ length: daysInMonth }).map((_, i) => {
             const day = i + 1;
-            const summary = getSummaryForDay(day);
+            const profit = getProfitForDay(day);
             const isToday = new Date().getDate() === day &&
               new Date().getMonth() === currentDate.getMonth() &&
               new Date().getFullYear() === currentDate.getFullYear();
@@ -126,7 +178,7 @@ const MonthlyCalendar = () => {
                 className={`
                   min-h-[80px] p-3 rounded-lg border transition-all hover:shadow-md relative group
                   ${isToday ? 'border-primary border-2' : 'border-border'}
-                  ${isPast && summary ? 'bg-muted/50' : 'bg-card'}
+                  ${isPast && profit !== undefined ? 'bg-muted/50' : 'bg-card'}
                   hover:bg-accent
                 `}
               >
@@ -134,11 +186,11 @@ const MonthlyCalendar = () => {
                 <div className="absolute top-2 right-2 text-lg font-bold text-primary group-hover:text-black transition-colors duration-200">{day}</div>
                 
                 {/* Conteúdo do lucro/prejuízo no centro */}
-                {summary && (
+                {profit !== undefined && (
                   <div className="flex flex-col items-center justify-center h-full pt-4">
                     <div className="text-xs text-muted-foreground">BRL</div>
-                    <div className={`text-sm font-bold ${summary.profit >= 0 ? 'text-success' : 'text-destructive'}`}>
-                      {summary.profit >= 0 ? '+' : '-'}R$ {Math.abs(Number(summary.profit)).toLocaleString('pt-BR', { 
+                    <div className={`text-sm font-bold ${profit >= 0 ? 'text-success' : 'text-destructive'}`}>
+                      {profit >= 0 ? '+' : ''}R$ {profit.toLocaleString('pt-BR', { 
                         minimumFractionDigits: 2, 
                         maximumFractionDigits: 2 
                       })}

@@ -452,7 +452,7 @@ const GestaoFuncionarios = () => {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm text-white mb-2">Total de Depósitos do Dia</p>
-                <p className="text-3xl font-bold text-success">R$ {totalDeposits.toLocaleString('pt-BR')}</p>
+                <p className="text-3xl font-bold text-foreground">R$ {totalDeposits.toLocaleString('pt-BR')}</p>
               </div>
               <div className="p-3 bg-gradient-primary rounded-xl shadow-glow">
                 <ArrowUpCircle className="h-6 w-6 text-primary-foreground" />

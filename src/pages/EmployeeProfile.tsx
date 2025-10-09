@@ -13,7 +13,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { ArrowLeft, Copy, Edit, Trash2, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
-import { useEmployees, useUpdateEmployee, useDeleteEmployee, useCreateTransaction, useDeleteTransaction, useTransactions, usePlatforms } from '@/hooks/useFirestore';
+import { useEmployees, useUpdateEmployee, useDeleteEmployee, useCreateTransaction, useDeleteTransaction, useUpdateTransaction, useTransactions, usePlatforms } from '@/hooks/useFirestore';
 import { toast } from 'sonner';
 
 const EmployeeProfile = () => {
@@ -27,6 +27,13 @@ const EmployeeProfile = () => {
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawPlatform, setWithdrawPlatform] = useState('');
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editTransactionModalOpen, setEditTransactionModalOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<any>(null);
+  const [editTransactionData, setEditTransactionData] = useState({
+    amount: '',
+    platformId: '',
+    type: 'deposit' as 'deposit' | 'withdraw'
+  });
   const [editFormData, setEditFormData] = useState({
     name: '',
     cpf: '',
@@ -43,7 +50,7 @@ const EmployeeProfile = () => {
   const employee = employees.find(emp => emp.id === id);
   
   // Buscar transações do funcionário
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }).split('/').reverse().join('-');
   const { data: employeeTransactions = [] } = useTransactions(user?.uid || '', today, today);
   
   const employeeTodayTransactions = employeeTransactions.filter(t => t.employeeId === id);
@@ -53,6 +60,7 @@ const EmployeeProfile = () => {
   const deleteEmployee = useDeleteEmployee();
   const createTransaction = useCreateTransaction();
   const deleteTransaction = useDeleteTransaction();
+  const updateTransaction = useUpdateTransaction();
 
   // Função para abrir modal de edição
   const handleEditClick = () => {
@@ -129,6 +137,40 @@ const EmployeeProfile = () => {
     }
   };
 
+  // Função para abrir modal de edição de transação
+  const handleEditTransactionClick = (transaction: any) => {
+    setEditingTransaction(transaction);
+    setEditTransactionData({
+      amount: transaction.amount.toString(),
+      platformId: transaction.platformId || '',
+      type: transaction.type
+    });
+    setEditTransactionModalOpen(true);
+  };
+
+  // Função para salvar edição de transação
+  const handleSaveTransactionEdit = async () => {
+    if (!editingTransaction || !user?.uid) return;
+
+    try {
+      await updateTransaction.mutateAsync({
+        userId: user.uid,
+        id: editingTransaction.id,
+        data: {
+          amount: Number(editTransactionData.amount),
+          platformId: editTransactionData.platformId,
+          type: editTransactionData.type
+        }
+      });
+      toast.success('Transação atualizada com sucesso!');
+      setEditTransactionModalOpen(false);
+      setEditingTransaction(null);
+    } catch (error) {
+      console.error('Erro ao atualizar transação:', error);
+      toast.error('Erro ao atualizar transação. Tente novamente.');
+    }
+  };
+
   const { data: platforms = [] } = usePlatforms(user?.uid || '');
   
   // Debug: verificar se as plataformas estão sendo carregadas
@@ -150,11 +192,13 @@ const EmployeeProfile = () => {
         platformId: platformId, // Sempre incluir platformId
         type,
         amount: Number(amount),
-        date: today
+        date: new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }).split('/').reverse().join('-')
       };
 
       console.log('Creating transaction:', transactionData);
-      await createTransaction.mutateAsync(transactionData);
+      console.log('Transaction date being saved:', transactionData.date);
+      const result = await createTransaction.mutateAsync(transactionData);
+      console.log('Transaction created with ID:', result);
       
       toast.success(`${type === 'deposit' ? 'Depósito' : 'Saque'} registrado com sucesso!`);
       
@@ -487,7 +531,15 @@ const EmployeeProfile = () => {
                         </span>
                       </TableCell>
                       <TableCell>
-                        {new Date(transaction.createdAt?.toDate?.() || transaction.date).toLocaleString('pt-BR')}
+                        {new Date(transaction.createdAt?.toDate?.() || transaction.date).toLocaleString('pt-BR', {
+                          timeZone: 'America/Sao_Paulo',
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit'
+                        })}
                       </TableCell>
                       <TableCell>
                         <span className={transaction.type === 'deposit' ? 'text-destructive' : 'text-success'}>
@@ -497,7 +549,11 @@ const EmployeeProfile = () => {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex gap-2 justify-end">
-                          <Button variant="ghost" size="icon">
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            onClick={() => handleEditTransactionClick(transaction)}
+                          >
                             <Edit className="h-4 w-4" />
                           </Button>
                           <Button
@@ -641,6 +697,78 @@ const EmployeeProfile = () => {
                   ) : (
                     'Salvar'
                   )}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Modal de Edição de Transação */}
+        <Dialog open={editTransactionModalOpen} onOpenChange={setEditTransactionModalOpen}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Editar Transação</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="edit-amount">Valor</Label>
+                <Input
+                  id="edit-amount"
+                  type="number"
+                  value={editTransactionData.amount}
+                  onChange={(e) => setEditTransactionData(prev => ({ ...prev, amount: e.target.value }))}
+                  placeholder="Digite o valor"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="edit-type">Tipo</Label>
+                <Select 
+                  value={editTransactionData.type} 
+                  onValueChange={(value: 'deposit' | 'withdraw') => setEditTransactionData(prev => ({ ...prev, type: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="deposit">Depósito</SelectItem>
+                    <SelectItem value="withdraw">Saque</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="edit-platform">Plataforma</Label>
+                <Select 
+                  value={editTransactionData.platformId} 
+                  onValueChange={(value) => setEditTransactionData(prev => ({ ...prev, platformId: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione uma plataforma" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {platforms.map((platform: any) => (
+                      <SelectItem key={platform.id} value={platform.id}>
+                        {platform.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setEditTransactionModalOpen(false)}
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  onClick={handleSaveTransactionEdit}
+                  disabled={updateTransaction.isPending}
+                >
+                  {updateTransaction.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Salvar
                 </Button>
               </div>
             </div>
