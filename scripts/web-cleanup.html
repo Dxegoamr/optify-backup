@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Limpeza de Plataformas - Optify</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .container {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        button {
+            background: #ff8c00;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px 5px;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #ff9500;
+        }
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        .log {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #444;
+            margin-top: 20px;
+        }
+        .warning {
+            background: #ff4444;
+            color: white;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 15px 0;
+        }
+        .success {
+            background: #44ff44;
+            color: #000;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 15px 0;
+        }
+        .input-group {
+            margin: 15px 0;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #444;
+            border-radius: 4px;
+            background: #333;
+            color: #fff;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Limpeza de Plataformas Duplicadas</h1>
+        <p>Este script irá identificar e remover plataformas duplicadas do banco de dados.</p>
+        
+        <div class="warning">
+            ⚠️ <strong>Atenção:</strong> Esta operação é irreversível. Certifique-se de fazer backup antes de executar.
+        </div>
+        
+        <div class="input-group">
+            <label for="apiKey">API Key do Firebase:</label>
+            <input type="text" id="apiKey" placeholder="AIzaSyC..." />
+        </div>
+        
+        <div class="input-group">
+            <label for="projectId">Project ID:</label>
+            <input type="text" id="projectId" placeholder="optify-definitivo" />
+        </div>
+        
+        <button id="analyzeBtn">🔍 Analisar Duplicatas</button>
+        <button id="cleanupBtn" disabled>🗑️ Remover Duplicatas</button>
+        <button id="clearLogBtn">🧹 Limpar Log</button>
+        
+        <div id="log" class="log"></div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getFirestore, collection, getDocs, deleteDoc, doc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        let app = null;
+        let db = null;
+        let duplicates = [];
+
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.textContent += `[${timestamp}] ${message}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('log').textContent = '';
+        }
+
+        function initializeFirebase() {
+            const apiKey = document.getElementById('apiKey').value;
+            const projectId = document.getElementById('projectId').value;
+            
+            if (!apiKey || !projectId) {
+                log('❌ Por favor, preencha a API Key e Project ID');
+                return false;
+            }
+
+            const firebaseConfig = {
+                apiKey: apiKey,
+                authDomain: `${projectId}.firebaseapp.com`,
+                projectId: projectId,
+                storageBucket: `${projectId}.appspot.com`,
+                messagingSenderId: "123456789",
+                appId: "1:123456789:web:abcdef"
+            };
+
+            try {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                log('✅ Firebase inicializado com sucesso');
+                return true;
+            } catch (error) {
+                log(`❌ Erro ao inicializar Firebase: ${error.message}`);
+                return false;
+            }
+        }
+
+        async function analyzeDuplicates() {
+            if (!initializeFirebase()) return;
+            
+            try {
+                log('🔍 Iniciando análise de duplicatas...');
+                
+                const platformsRef = collection(db, 'platforms');
+                const snapshot = await getDocs(platformsRef);
+                
+                log(`📊 Total de plataformas encontradas: ${snapshot.size}`);
+                
+                const platformsByName = {};
+                const allPlatforms = [];
+                
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const name = data.name?.toLowerCase().trim();
+                    
+                    if (!name) {
+                        log(`⚠️  Plataforma sem nome encontrada: ${doc.id}`);
+                        return;
+                    }
+                    
+                    const platform = {
+                        id: doc.id,
+                        name: data.name,
+                        normalizedName: name,
+                        data: data,
+                        createdAt: data.createdAt?.toDate() || new Date(0)
+                    };
+                    
+                    allPlatforms.push(platform);
+                    
+                    if (!platformsByName[name]) {
+                        platformsByName[name] = [];
+                    }
+                    platformsByName[name].push(platform);
+                });
+                
+                duplicates = [];
+                Object.keys(platformsByName).forEach(name => {
+                    const platforms = platformsByName[name];
+                    if (platforms.length > 1) {
+                        log(`🔄 Duplicatas encontradas para "${name}": ${platforms.length} registros`);
+                        
+                        // Ordenar por data de criação (manter o mais antigo)
+                        platforms.sort((a, b) => a.createdAt - b.createdAt);
+                        
+                        // Marcar todos exceto o primeiro como duplicatas
+                        for (let i = 1; i < platforms.length; i++) {
+                            duplicates.push(platforms[i]);
+                        }
+                    }
+                });
+                
+                log(`🗑️  Total de duplicatas identificadas: ${duplicates.length}`);
+                
+                if (duplicates.length === 0) {
+                    log('✅ Nenhuma duplicata encontrada!');
+                    document.getElementById('cleanupBtn').disabled = true;
+                } else {
+                    log('\n📋 Duplicatas que serão removidas:');
+                    duplicates.forEach((dup, index) => {
+                        log(`${index + 1}. ID: ${dup.id} | Nome: ${dup.name} | Criado: ${dup.createdAt.toLocaleString()}`);
+                    });
+                    document.getElementById('cleanupBtn').disabled = false;
+                }
+                
+            } catch (error) {
+                log(`❌ Erro durante análise: ${error.message}`);
+            }
+        }
+
+        async function cleanupDuplicates() {
+            if (duplicates.length === 0) {
+                log('⚠️  Nenhuma duplicata para remover.');
+                return;
+            }
+            
+            try {
+                log('🗑️  Iniciando remoção de duplicatas...');
+                
+                let deletedCount = 0;
+                for (const duplicate of duplicates) {
+                    await deleteDoc(doc(db, 'platforms', duplicate.id));
+                    deletedCount++;
+                    log(`✅ Removida: ${duplicate.name} (${duplicate.id})`);
+                }
+                
+                log(`\n🎉 Limpeza concluída! ${deletedCount} duplicatas removidas.`);
+                
+                // Verificar resultado final
+                const platformsRef = collection(db, 'platforms');
+                const finalSnapshot = await getDocs(platformsRef);
+                log(`📊 Total de plataformas após limpeza: ${finalSnapshot.size}`);
+                
+                document.getElementById('cleanupBtn').disabled = true;
+                duplicates = [];
+                
+            } catch (error) {
+                log(`❌ Erro durante limpeza: ${error.message}`);
+            }
+        }
+
+        // Event listeners
+        document.getElementById('analyzeBtn').addEventListener('click', analyzeDuplicates);
+        document.getElementById('cleanupBtn').addEventListener('click', cleanupDuplicates);
+        document.getElementById('clearLogBtn').addEventListener('click', clearLog);
+
+        log('🚀 Script carregado. Preencha os dados do Firebase e clique em "Analisar Duplicatas" para começar.');
+    </script>
+</body>
+</html>

@@ -237,28 +237,5 @@ export const transactionService = {
   }
 };
 
-export const platformService = {
-  // Buscar plataformas por usuário
-  getByUser: async (userId: string) => {
-    return getDocuments(collections.platforms, [
-      where('userId', '==', userId)
-      // orderBy temporariamente removido até os índices serem construídos
-    ]);
-  },
-
-  // Criar plataforma
-  create: async (platformData: Omit<Platform, 'id' | 'createdAt' | 'updatedAt'>) => {
-    return createDocument(collections.platforms, platformData);
-  },
-
-  // Atualizar plataforma
-  update: async (platformId: string, data: Partial<Platform>) => {
-    return updateDocument(collections.platforms, platformId, data);
-  },
-
-  // Deletar plataforma
-  delete: async (platformId: string) => {
-    return deleteDocument(collections.platforms, platformId);
-  }
-};
+// platformService removido - usar UserPlatformService das subcoleções
 

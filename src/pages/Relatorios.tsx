@@ -1224,35 +1224,9 @@ const Relatorios = () => {
     <DashboardLayout>
       <div className="space-y-6 animate-fade-in">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            {/* Logo do Optify */}
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <svg width="40" height="40" viewBox="0 0 40 40" className="text-primary">
-                  <defs>
-                    <linearGradient id="diamondGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#FFA500" />
-                      <stop offset="100%" stopColor="#FF8C00" />
-                    </linearGradient>
-                  </defs>
-                  <path
-                    d="M20 2 L30 12 L20 22 L10 12 Z"
-                    fill="url(#diamondGradient)"
-                    stroke="none"
-                  />
-                  <path
-                    d="M20 6 L26 12 L20 18 L14 12 Z"
-                    fill="white"
-                    opacity="0.3"
-                  />
-                </svg>
-                <div className="absolute -inset-1 bg-primary/20 rounded-full blur-sm animate-pulse"></div>
-              </div>
           <div>
             <h1 className="text-4xl font-bold mb-2">Relatórios</h1>
             <p className="text-muted-foreground">Análises e insights do seu negócio</p>
-          </div>
-            </div>
           </div>
           <div className="flex gap-3">
             <Button 
