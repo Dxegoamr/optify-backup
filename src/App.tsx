@@ -27,6 +27,9 @@ import Settings from "./pages/Settings";
 import Perfil from "./pages/Perfil";
 import NotFound from "./pages/NotFound";
 import EmployeeProfile from "./pages/EmployeeProfile";
+import Termos from "./pages/Termos";
+import Privacidade from "./pages/Privacidade";
+import Suporte from "./pages/Suporte";
 
 const queryClient = new QueryClient();
 
@@ -58,6 +61,10 @@ const App = () => (
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/perfil" element={<ProtectedRoute><Perfil /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
+
+            <Route path="/termos" element={<Termos />} />
+            <Route path="/privacidade" element={<Privacidade />} />
+            <Route path="/suporte" element={<Suporte />} />
             
             <Route path="*" element={<NotFound />} />
           </Routes>

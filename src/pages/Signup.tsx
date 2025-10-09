@@ -54,18 +54,17 @@ const Signup = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-background relative overflow-hidden">
-      {/* Background Effects */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute w-96 h-96 bg-primary/20 rounded-full blur-3xl -top-48 -left-48 animate-float-slow" />
-        <div className="absolute w-96 h-96 bg-secondary/20 rounded-full blur-3xl -bottom-48 -right-48 animate-float-reverse" />
-        <div className="absolute w-64 h-64 bg-primary/10 rounded-full blur-2xl top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-float-center" />
+      {/* BG animado igual à landing */}
+      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
+        <div className="absolute w-[36rem] h-[36rem] bg-primary/20 rounded-full blur-3xl -top-48 -left-48 animate-pulse" />
+        <div className="absolute w-[36rem] h-[36rem] bg-secondary/20 rounded-full blur-3xl top-1/2 right-0 animate-pulse" />
+        <div className="absolute w-[36rem] h-[36rem] bg-primary/20 rounded-full blur-3xl -bottom-48 -right-48 animate-pulse" />
+        <div className="orange-orb absolute w-96 h-96 left-[8%] top-[30%] animate-float-slow" />
+        <div className="orange-orb absolute w-[28rem] h-[28rem] left-[55%] top-[10%] animate-float-reverse" />
+        <div className="orange-orb absolute w-80 h-80 left-[72%] top-[70%] animate-float-center" />
+        <div className="orange-orb absolute w-72 h-72 left-[22%] top-[75%] animate-float-reverse" />
+        <div className="orange-beam absolute w-[140%] h-24 left-[-20%] top-[40%] animate-beam" />
       </div>
-      
-      {/* Floating Elements */}
-      <div className="absolute top-20 left-20 w-2 h-2 bg-primary rounded-full animate-bounce delay-300" />
-      <div className="absolute top-40 right-32 w-1 h-1 bg-secondary rounded-full animate-bounce delay-700" />
-      <div className="absolute bottom-32 left-40 w-1.5 h-1.5 bg-primary rounded-full animate-bounce delay-1000" />
-      <div className="absolute bottom-20 right-20 w-2 h-2 bg-secondary rounded-full animate-bounce delay-500" />
 
       <div className="w-full max-w-md p-8 relative z-10">
         <div className="text-center mb-8">
@@ -102,7 +101,7 @@ const Signup = () => {
               </h1>
             </button>
           </div>
-          <p className="text-muted-foreground text-sm">Crie sua conta e gerencie suas finanças</p>
+          <p className="text-muted-foreground text-sm">Crie sua conta e gerencie suas operações</p>
           
           {/* Decorative Line */}
           <div className="w-16 h-0.5 bg-gradient-primary mx-auto mt-4 rounded-full" />

@@ -123,6 +123,52 @@ All colors MUST be HSL.
     box-shadow: var(--shadow-glow);
   }
 
+  /* Marquee animation */
+  .marquee {
+    animation: marqueeScroll 30s linear infinite;
+    will-change: transform;
+  }
+
+  @keyframes marqueeScroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  /* Orbs e feixes laranja para o BG da landing */
+  .orange-orb {
+    background: radial-gradient(
+      circle at 50% 50%,
+      hsl(22 100% 50% / 0.35) 0%,
+      hsl(22 100% 50% / 0.15) 40%,
+      transparent 70%
+    );
+    filter: blur(60px);
+    mix-blend-mode: screen;
+  }
+
+  .orange-beam {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      hsl(22 100% 50% / 0.15) 20%,
+      hsl(22 100% 50% / 0.25) 50%,
+      hsl(22 100% 50% / 0.15) 80%,
+      transparent 100%
+    );
+    mix-blend-mode: screen;
+    filter: blur(20px);
+  }
+
+  .animate-beam {
+    animation: beamSweep 14s linear infinite;
+  }
+
+  @keyframes beamSweep {
+    0% { transform: translateX(-40%) rotate(20deg); opacity: 0.6; }
+    50% { transform: translateX(0%) rotate(20deg); opacity: 0.9; }
+    100% { transform: translateX(40%) rotate(20deg); opacity: 0.6; }
+  }
+
   .animate-fade-in {
     animation: fadeIn 0.5s ease-in-out;
   }
