@@ -228,3 +228,5 @@ const MercadoPagoCheckout = ({
 
 export default MercadoPagoCheckout;
 
+
+

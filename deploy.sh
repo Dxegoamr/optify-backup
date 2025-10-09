@@ -76,3 +76,5 @@ echo -e "${YELLOW}📝 Para configurar secrets, execute:${NC}"
 echo -e "${YELLOW}   gcloud secrets create firebase-private-key --data-file=path/to/firebase-private-key.json${NC}"
 echo -e "${YELLOW}   gcloud secrets create mercado-pago-token --data-file=path/to/mercado-pago-token.txt${NC}"
 
+
+

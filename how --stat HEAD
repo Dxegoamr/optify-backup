@@ -1,0 +1,5 @@
+[33me32c6f4[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m feat: Correções importantes no sistema
+[33mfb8f4ee[m feat: Melhorias na landing page e pÃ¡ginas de auth
+[33m3c36b0b[m feat: Implementa sistema de fechamento diÃ¡rio automÃ¡tico
+[33m9a88d8b[m feat: Add glow hover effects to all summary cards and improve transaction filters
+[33m83d0d23[m chore: migrate to per-user subcollections, onboarding tweaks, platform selection flow, fix delete account (Auth + Firestore), simplify signup

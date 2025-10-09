@@ -23,3 +23,5 @@ export const getMercadoPagoUrl = () => {
   return mercadoPagoUrls[mercadoPagoConfig.environment as keyof typeof mercadoPagoUrls] || mercadoPagoUrls.sandbox;
 };
 
+
+
