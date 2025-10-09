@@ -97,8 +97,11 @@ export const firestoreUtils = {
   // Converter timestamp para data
   timestampToDate: (timestamp: Timestamp) => timestamp.toDate(),
   
-  // Converter data para string YYYY-MM-DD
-  dateToString: (date: Date) => date.toISOString().split('T')[0],
+  // Converter data para string YYYY-MM-DD (no fuso horário de São Paulo)
+  dateToString: (date: Date) => {
+    // Usar o fuso horário de São Paulo para garantir consistência
+    return date.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  },
   
   // Gerar ID único
   generateId: () => doc(collection(db, 'temp')).id

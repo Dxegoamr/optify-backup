@@ -13,7 +13,8 @@ import {
   TrendingUp,
   Shield,
   UserCircle,
-  Gift
+  Gift,
+  Clock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -46,6 +47,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     { icon: PieChart, label: 'Saldos', path: '/saldos' },
     { icon: TrendingUp, label: 'Relatórios', path: '/relatorios' },
     { icon: Calendar, label: 'Histórico', path: '/historico' },
+    { icon: Clock, label: 'Histórico Diário', path: '/historico-diario' },
     { icon: Gift, label: 'Afiliados', path: '/afiliados' },
     ...(user?.isAdmin ? [{ icon: Shield, label: 'Admin', path: '/admin' }] : []),
   ];

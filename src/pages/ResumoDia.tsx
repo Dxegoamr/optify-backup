@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { TrendingUp, TrendingDown, Calendar as CalendarIcon, ArrowUp, ArrowDown, Target, Trophy, Lock, Filter, X } from 'lucide-react';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
 import { useEmployees, useTransactions, usePlatforms, useDeleteTransaction } from '@/hooks/useFirestore';
+import { getCurrentDateInSaoPaulo, formatDateInSaoPaulo } from '@/utils/timezone';
 import { UserDailySummaryService } from '@/core/services/user-specific.service';
 import { toast } from 'sonner';
 import { Calendar } from '@/components/ui/calendar';
@@ -21,7 +22,7 @@ const ResumoDia = () => {
   const { user } = useFirebaseAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date>(getCurrentDateInSaoPaulo());
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<string>('');

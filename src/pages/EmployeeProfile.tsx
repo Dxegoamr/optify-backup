@@ -475,9 +475,15 @@ const EmployeeProfile = () => {
                       <TableCell>
                         <span
                           className="font-semibold"
-                          style={{ color: transaction.platforms?.color || '#FF5C00' }}
+                          style={{ color: (() => {
+                            const platform = platforms.find(p => p.id === transaction.platformId);
+                            return platform?.color || '#FF5C00';
+                          })() }}
                         >
-                          {transaction.platforms?.name || 'N/A'}
+                          {(() => {
+                            const platform = platforms.find(p => p.id === transaction.platformId);
+                            return platform?.name || 'N/A';
+                          })()}
                         </span>
                       </TableCell>
                       <TableCell>

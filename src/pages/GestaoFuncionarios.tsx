@@ -447,7 +447,7 @@ const GestaoFuncionarios = () => {
 
           <Card 
             className="p-6 shadow-card card-hover cursor-pointer hover:shadow-glow transition-all duration-300"
-            onClick={() => navigate('/resumo-dia?filter=deposits')}
+            onClick={() => navigate('/relatorios')}
           >
             <div className="flex items-start justify-between">
               <div>
@@ -462,7 +462,7 @@ const GestaoFuncionarios = () => {
 
           <Card 
             className="p-6 shadow-card card-hover cursor-pointer hover:shadow-glow transition-all duration-300"
-            onClick={() => navigate('/resumo-dia?filter=withdraws')}
+            onClick={() => navigate('/relatorios')}
           >
             <div className="flex items-start justify-between">
               <div>
@@ -477,7 +477,7 @@ const GestaoFuncionarios = () => {
 
           <Card 
             className="p-6 shadow-card card-hover cursor-pointer hover:shadow-glow transition-all duration-300"
-            onClick={() => navigate('/resumo-dia?filter=profit')}
+            onClick={() => navigate('/relatorios')}
           >
             <div className="flex items-start justify-between">
               <div>
@@ -620,6 +620,7 @@ const GestaoFuncionarios = () => {
             })}
           </div>
         )}
+
       </div>
     </DashboardLayout>
   );

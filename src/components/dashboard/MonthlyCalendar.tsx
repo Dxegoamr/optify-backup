@@ -5,11 +5,12 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
 import { useTransactions } from '@/hooks/useFirestore';
+import { getCurrentDateInSaoPaulo, formatDateInSaoPaulo } from '@/utils/timezone';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import DayTransactionsModal from './DayTransactionsModal';
 
 const MonthlyCalendar = () => {
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentDate, setCurrentDate] = useState(getCurrentDateInSaoPaulo());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const { user } = useFirebaseAuth();
 

@@ -5,6 +5,7 @@ import {
   UserPlatformService,
   UserTransactionService,
   UserAccountService,
+  UserDailySummaryService,
 } from '@/core/services/user-specific.service';
 import { where } from 'firebase/firestore';
 
@@ -228,6 +229,15 @@ export const useInitializeDefaultPlatforms = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['firebase-platforms'] });
     }
+  });
+};
+
+// Hook para resumos diários
+export const useDailySummaries = (userId: string) => {
+  return useQuery({
+    queryKey: ['firebase-daily-summaries', userId],
+    queryFn: () => UserDailySummaryService.getDailySummaries(userId),
+    enabled: !!userId
   });
 };
 

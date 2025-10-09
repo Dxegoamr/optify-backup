@@ -16,7 +16,6 @@ interface EmployeeFormData {
   phone: string;
   birthDate: string;
   salary: number;
-  payDay: number;
 }
 
 const EmployeeFormModal = () => {
@@ -29,8 +28,7 @@ const EmployeeFormModal = () => {
     email: '',
     phone: '',
     birthDate: '',
-    salary: 0,
-    payDay: 1
+    salary: 0
   });
   const [errors, setErrors] = useState<Partial<EmployeeFormData>>({});
 
@@ -113,7 +111,6 @@ const EmployeeFormModal = () => {
         phone: formData.phone.trim() || '',
         birthDate: formData.birthDate || '',
         salary: formData.salary || 0,
-        payDay: formData.payDay || 1,
         status: 'active'
       });
 
@@ -125,8 +122,7 @@ const EmployeeFormModal = () => {
         email: '',
         phone: '',
         birthDate: '',
-        salary: 0,
-        payDay: 1
+        salary: 0
       });
     } catch (error) {
       console.error('Erro ao cadastrar funcionário:', error);
@@ -226,21 +222,6 @@ const EmployeeFormModal = () => {
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="payDay">Dia do Pagamento</Label>
-            <Select value={formData.payDay.toString()} onValueChange={(value) => handleInputChange('payDay', value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o dia" />
-              </SelectTrigger>
-              <SelectContent>
-                {Array.from({ length: 28 }, (_, i) => i + 1).map((day) => (
-                  <SelectItem key={day} value={day.toString()}>
-                    {day}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
 
 
           <div className="flex justify-end space-x-2 pt-4">
