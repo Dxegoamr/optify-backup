@@ -134,6 +134,20 @@ All colors MUST be HSL.
     100% { transform: translateX(-50%); }
   }
 
+  /* Scroll animation */
+  .animate-fade-in-scroll {
+    opacity: 0;
+    transform: translateY(60px) scale(0.95);
+    transition: opacity 1.2s ease-out, transform 1.2s ease-out;
+    filter: blur(2px);
+  }
+
+  .animate-fade-in-scroll.is-visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+
   /* Orbs e feixes laranja para o BG da landing */
   .orange-orb {
     background: radial-gradient(

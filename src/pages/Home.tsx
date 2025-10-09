@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
 import { Button } from '@/components/ui/button';
 import { TrendingUp, Shield, Zap, Users, CheckCircle, ArrowRight, Star, Crown, Rocket, Building2, Wallet, BarChart3, Calendar, ClipboardList, Lock, Instagram } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { usePlans } from '@/hooks/usePlans';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
@@ -15,6 +15,28 @@ const Home = () => {
       navigate('/dashboard');
     }
   }, [user, navigate]);
+
+  // Hook para efeito de scroll
+  useEffect(() => {
+    const observerOptions = {
+      threshold: 0.2,
+      rootMargin: '0px 0px -100px 0px'
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-visible');
+        }
+      });
+    }, observerOptions);
+
+    // Observar todos os elementos com classe de animação
+    const animatedElements = document.querySelectorAll('.animate-fade-in-scroll');
+    animatedElements.forEach((el) => observer.observe(el));
+
+    return () => observer.disconnect();
+  }, []);
 
   const features = [
     {
@@ -258,10 +280,10 @@ const Home = () => {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" className="text-lg px-8" onClick={() => navigate('/signup')}>
+            <Button size="lg" className="text-xl px-12 py-6" onClick={() => navigate('/signup')}>
               Começar Teste Gratuito
             </Button>
-            <Button size="lg" variant="outline" className="text-lg px-8" onClick={() => scrollToId('plans')}>
+            <Button size="lg" variant="outline" className="text-xl px-12 py-6" onClick={() => scrollToId('plans')}>
               Ver Planos
             </Button>
           </div>
@@ -312,7 +334,7 @@ const Home = () => {
 
       {/* Teste Gratuito */}
       <section className="relative z-10 container mx-auto px-4 py-16">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-4xl mx-auto animate-fade-in-scroll">
           <div className="glass rounded-2xl p-8 md:p-12 text-center border border-primary/20">
             <div className="flex justify-center mb-6">
               <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
@@ -345,7 +367,7 @@ const Home = () => {
               </div>
             </div>
             
-            <Button size="lg" className="text-lg px-8" onClick={() => navigate('/signup')}>
+            <Button size="lg" className="text-xl px-12 py-6" onClick={() => navigate('/signup')}>
               Começar Teste Gratuito
               <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
@@ -359,12 +381,12 @@ const Home = () => {
 
       {/* Plans */}
       <section id="plans" className="relative z-10 container mx-auto px-4 py-20">
-        <div className="text-center mb-12">
+        <div className="text-center mb-12 animate-fade-in-scroll">
           <h3 className="text-3xl md:text-4xl font-bold mb-3">Planos para cada estágio</h3>
           <p className="text-muted-foreground text-lg">Escolha o plano ideal e comece agora mesmo</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto animate-fade-in-scroll">
           {dynamicPlans.map((plan: any, index: number) => (
             <div
               key={index}
@@ -414,37 +436,27 @@ const Home = () => {
                   ))}
                 </ul>
 
-                {/* Botão */}
-                <Button 
-                  className={`w-full ${
-                    plan.name === 'Free' ? 'bg-gray-500 hover:bg-gray-600' :
-                    plan.name === 'Standard' ? 'bg-blue-500 hover:bg-blue-600' :
-                    plan.name === 'Medium' ? 'bg-green-500 hover:bg-green-600' :
-                    'bg-purple-500 hover:bg-purple-600'
-                  }`}
-                  onClick={() => navigate('/signup')}
-                >
-                  {plan.name === 'Free' ? (
-                    <>
-                      <CheckCircle className="mr-2 h-4 w-4" />
-                      Plano Atual
-                    </>
-                  ) : (
-                    <>
-                      Assinar {plan.name}
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </>
-                  )}
-                </Button>
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Botão de teste gratuito */}
+        <div className="text-center mt-16 mb-8">
+          <Button 
+            size="lg" 
+            className="text-xl px-12 py-6 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105" 
+            onClick={() => navigate('/signup')}
+          >
+            Começar 7 dias grátis
+            <ArrowRight className="ml-2 h-5 w-5" />
+          </Button>
         </div>
       </section>
 
       {/* Metrics */}
       <section id="metrics" className="relative z-10 container mx-auto px-4 py-12">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-6xl mx-auto">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-6xl mx-auto animate-fade-in-scroll">
           {[
             { label: 'Usuários ativos', value: '250+' },
             { label: 'Transações/mês', value: '120K+' },
@@ -463,11 +475,11 @@ const Home = () => {
 
       {/* FAQ */}
       <section id="faq" className="relative z-10 container mx-auto px-4 py-20">
-        <div className="text-center mb-10">
+        <div className="text-center mb-10 animate-fade-in-scroll">
           <h3 className="text-3xl md:text-4xl font-bold mb-3">Perguntas frequentes</h3>
           <p className="text-muted-foreground">Tudo o que você precisa saber para começar</p>
         </div>
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-4xl mx-auto animate-fade-in-scroll">
           <Accordion type="single" collapsible className="space-y-3">
             <AccordionItem value="item-1" className="glass rounded-xl px-4">
               <AccordionTrigger>Posso começar grátis e mudar depois?</AccordionTrigger>
@@ -514,11 +526,11 @@ const Home = () => {
 
       {/* Contact */}
       <section id="contact" className="relative z-10 container mx-auto px-4 py-20">
-        <div className="text-center mb-10">
+        <div className="text-center mb-10 animate-fade-in-scroll">
           <h3 className="text-3xl md:text-4xl font-bold mb-3">Fale com a gente</h3>
           <p className="text-muted-foreground">Entre em contato pelos nossos canais oficiais</p>
         </div>
-        <div className="max-w-3xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <div className="max-w-3xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-6 animate-fade-in-scroll">
           <a
             href="https://wa.me/556295536121"
             target="_blank"
@@ -551,13 +563,7 @@ const Home = () => {
 
       {/* CTA Section */}
       <section className="relative z-10 container mx-auto px-4 py-20">
-        <div className="relative overflow-hidden rounded-3xl border border-primary/20 bg-gradient-to-br from-background via-background to-primary/5 p-16 text-center space-y-8 max-w-4xl mx-auto">
-          {/* Background effects */}
-          <div className="absolute inset-0 bg-gradient-to-r from-primary/10 via-transparent to-primary/10 opacity-50" />
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-96 bg-primary/20 rounded-full blur-3xl -translate-y-48" />
-          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-96 h-96 bg-primary/20 rounded-full blur-3xl translate-y-48" />
-          
-          <div className="relative z-10 space-y-6">
+        <div className="glass rounded-2xl p-8 md:p-12 text-center border border-primary/20 max-w-4xl mx-auto space-y-6 animate-fade-in-scroll">
             {/* Diamond icon */}
             <div className="flex justify-center mb-4">
               <svg 
@@ -627,7 +633,6 @@ const Home = () => {
             <p className="text-sm text-muted-foreground pt-4">
               Sem compromisso • Comece grátis • Cancele quando quiser
             </p>
-          </div>
         </div>
       </section>
 
