@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
+import { usePlanLimitations } from '@/hooks/usePlanLimitations';
 import { deleteUser } from 'firebase/auth';
 import { auth } from '@/integrations/firebase/config';
 import { deleteAllUserData } from '@/core/services/user-subcollections.service';
@@ -26,6 +27,7 @@ import {
 
 const Perfil = () => {
   const { user, logout } = useFirebaseAuth();
+  const { currentPlan } = usePlanLimitations();
   const navigate = useNavigate();
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -96,7 +98,7 @@ const Perfil = () => {
               <div className="flex items-center gap-3 mb-2">
                 <h2 className="text-2xl font-bold">{user?.name}</h2>
                 <Badge variant="default" className="capitalize">
-                  {user?.plan}
+                  {currentPlan}
                 </Badge>
                 {user?.isAdmin && (
                   <Badge variant="secondary">Admin</Badge>
@@ -151,7 +153,7 @@ const Perfil = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
             <div>
               <p className="text-sm text-muted-foreground mb-1">Plano</p>
-              <p className="text-xl font-bold capitalize">{user?.plan}</p>
+              <p className="text-xl font-bold capitalize">{currentPlan}</p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground mb-1">Próximo Pagamento</p>
@@ -160,9 +162,9 @@ const Perfil = () => {
             <div>
               <p className="text-sm text-muted-foreground mb-1">Valor Mensal</p>
               <p className="text-xl font-bold">
-                {user?.plan === 'free' ? 'Grátis' : 
-                 user?.plan === 'standard' ? 'R$ 49' :
-                 user?.plan === 'medium' ? 'R$ 99' : 'R$ 199'}
+                {currentPlan === 'free' ? 'Grátis' : 
+                 currentPlan === 'standard' ? 'R$ 49' :
+                 currentPlan === 'medium' ? 'R$ 99' : 'R$ 199'}
               </p>
             </div>
           </div>

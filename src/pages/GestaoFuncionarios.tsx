@@ -13,11 +13,14 @@ import { useEmployees, useTransactions, useCreateEmployee } from '@/hooks/useFir
 import { toast } from 'sonner';
 import { generateTestEmployees } from '@/utils/generateTestData';
 import EmployeeFormModal from '@/components/dashboard/EmployeeFormModal';
+import EmployeeLimitWarning from '@/components/EmployeeLimitWarning';
+import { usePlanLimitations } from '@/hooks/usePlanLimitations';
 
 const GestaoFuncionarios = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useFirebaseAuth();
+  const { canAddMoreEmployees, getEmployeeLimitForPlan } = usePlanLimitations();
   const [searchTerm, setSearchTerm] = useState('');
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importData, setImportData] = useState<any[]>([]);
@@ -240,6 +243,9 @@ const GestaoFuncionarios = () => {
             <EmployeeFormModal />
           </div>
         </div>
+
+        {/* Employee Limit Warning */}
+        <EmployeeLimitWarning currentCount={employees.length} />
 
         {/* Search & Actions */}
         <Card className="p-4 shadow-card">

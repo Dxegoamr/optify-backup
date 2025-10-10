@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { FirebaseAuthProvider } from "@/contexts/FirebaseAuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import PlanLimitationGuard from "@/components/PlanLimitationGuard";
 
 // Pages
 import Home from "./pages/Home";
@@ -49,16 +50,16 @@ const App = () => (
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/gestao-funcionarios" element={<ProtectedRoute><GestaoFuncionarios /></ProtectedRoute>} />
             <Route path="/gestao-funcionarios/:id" element={<ProtectedRoute><EmployeeProfile /></ProtectedRoute>} />
-            <Route path="/pagamentos" element={<ProtectedRoute><Pagamentos /></ProtectedRoute>} />
+            <Route path="/pagamentos" element={<ProtectedRoute><PlanLimitationGuard requiredFeature="payments" pageName="Gestão de Pagamentos"><Pagamentos /></PlanLimitationGuard></ProtectedRoute>} />
             <Route path="/resumo-dia" element={<ProtectedRoute><ResumoDia /></ProtectedRoute>} />
-            <Route path="/saldos" element={<ProtectedRoute><Saldos /></ProtectedRoute>} />
-            <Route path="/relatorios" element={<ProtectedRoute><Relatorios /></ProtectedRoute>} />
-            <Route path="/historico" element={<ProtectedRoute><Historico /></ProtectedRoute>} />
+            <Route path="/saldos" element={<ProtectedRoute><PlanLimitationGuard requiredFeature="balances" pageName="Saldo de Contas"><Saldos /></PlanLimitationGuard></ProtectedRoute>} />
+            <Route path="/relatorios" element={<ProtectedRoute><PlanLimitationGuard requiredFeature="reports" pageName="Relatórios"><Relatorios /></PlanLimitationGuard></ProtectedRoute>} />
+            <Route path="/historico" element={<ProtectedRoute><PlanLimitationGuard requiredFeature="history" pageName="Histórico"><Historico /></PlanLimitationGuard></ProtectedRoute>} />
             <Route path="/planos" element={<ProtectedRoute><Planos /></ProtectedRoute>} />
             <Route path="/afiliados" element={<ProtectedRoute><Afiliados /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/perfil" element={<ProtectedRoute><Perfil /></ProtectedRoute>} />
-            <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
+            <Route path="/admin" element={<ProtectedRoute requireAdmin><PlanLimitationGuard requiredFeature="advancedPanel" pageName="Painel Administrativo"><Admin /></PlanLimitationGuard></ProtectedRoute>} />
 
             <Route path="/termos" element={<Termos />} />
             <Route path="/privacidade" element={<Privacidade />} />

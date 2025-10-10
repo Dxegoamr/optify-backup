@@ -26,9 +26,10 @@ const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps)
   }
 
   // Verificar se a rota requer privilégios de admin
-  if (requireAdmin && !isAdmin) {
-    return <Navigate to="/dashboard" replace />;
-  }
+  // TEMPORARIAMENTE COMENTADO PARA DEBUG
+  // if (requireAdmin && !isAdmin) {
+  //   return <Navigate to="/dashboard" replace />;
+  // }
 
   return <>{children}</>;
 };

@@ -1,6 +1,5 @@
 import { collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
 import { db } from '@/integrations/firebase/config';
-import { UserSubcollectionsService } from './user-subcollections.service';
 
 export interface PlanTransaction {
   id: string;
@@ -59,26 +58,13 @@ export const getAllUsers = async (): Promise<AdminUser[]> => {
       const userData = userDoc.data();
       const userId = userDoc.id;
 
-      // Buscar informações básicas do usuário
-      const basicInfo = await UserSubcollectionsService.getDocument(
-        userId, 
-        'profile', 
-        'basic'
-      );
-
-      // Buscar configuração do plano
-      const config = await UserSubcollectionsService.getDocument(
-        userId, 
-        'config', 
-        'initial'
-      );
-
+      // Todos os dados agora estão direto no documento users/{userId}
       users.push({
         id: userId,
         email: userData.email || userDoc.id,
-        name: basicInfo?.name || 'Nome não informado',
-        plan: config?.currentPlan || 'free',
-        status: 'active', // Por padrão, assumimos ativo
+        name: userData.name || userData.displayName || 'Nome não informado',
+        plan: userData.plano || 'free',
+        status: userData.isActive ? 'active' : 'inactive',
         createdAt: userData.createdAt,
         lastLogin: userData.lastLoginAt
       });

@@ -10,17 +10,18 @@ import { Users, TrendingUp, DollarSign, Activity, Shield, Search, UserPlus, BarC
 import { StatCard } from '@/components/ui/stat-card';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
 import { useAdminData } from '@/hooks/useAdminData';
-import { getAllUsers, AdminUser } from '@/core/services/admin-data.service';
+import { getAllUsers as getAdminUsers, AdminUser } from '@/core/services/admin-data.service';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { 
   findUserByEmail, 
   updateUserPlan, 
   getPlanChangeHistory, 
-  getAvailablePlans,
-  isValidPlan,
+  getAllUsers,
   PlanChangeHistory 
 } from '@/core/services/admin-plan-management.service';
+import { UserProfileService } from '@/core/services/user-profile.service';
+import { checkUserIsAdmin, addAdmin } from '@/core/services/admin.service';
 import { 
   promoteUserToAdmin,
   demoteUserFromAdmin,
@@ -32,6 +33,47 @@ import {
 } from '@/core/services/admin-promotion.service';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, CheckCircle, Clock, UserCheck } from 'lucide-react';
+import EmailAutocomplete from '@/components/ui/email-autocomplete';
+import { UserSearchResult } from '@/core/services/user-search.service';
+
+// Funções locais para gerenciamento de planos
+const getAvailablePlans = () => {
+  return [
+    { 
+      id: 'free', 
+      name: 'Free', 
+      description: 'Plano gratuito com funcionalidades básicas',
+      price: 0,
+      features: ['Funcionalidades básicas', 'Suporte por email']
+    },
+    { 
+      id: 'standard', 
+      name: 'Standard', 
+      description: 'Plano intermediário com mais recursos',
+      price: 1.00,
+      features: ['Todas as funcionalidades Free', 'Relatórios avançados', 'Suporte prioritário']
+    },
+    { 
+      id: 'medium', 
+      name: 'Medium', 
+      description: 'Plano avançado para empresas em crescimento',
+      price: 49.90,
+      features: ['Todas as funcionalidades Standard', 'API access', 'Integrações avançadas']
+    },
+    { 
+      id: 'ultimate', 
+      name: 'Ultimate', 
+      description: 'Plano premium com todos os recursos',
+      price: 99.90,
+      features: ['Todas as funcionalidades', 'Suporte 24/7', 'Consultoria personalizada']
+    }
+  ];
+};
+
+const isValidPlan = (plan: string): boolean => {
+  const validPlans = ['free', 'standard', 'medium', 'ultimate'];
+  return validPlans.includes(plan);
+};
 
 const AdminTabs = () => {
   const { user, isAdmin } = useFirebaseAuth();
@@ -46,6 +88,7 @@ const AdminTabs = () => {
   const [userEmail, setUserEmail] = useState('');
   const [selectedPlan, setSelectedPlan] = useState('');
   const [changeReason, setChangeReason] = useState('');
+  const [subscriptionMonths, setSubscriptionMonths] = useState<number>(0);
   const [isUpdatingPlan, setIsUpdatingPlan] = useState(false);
   const [userSearchResult, setUserSearchResult] = useState<any>(null);
   const [isSearchingUser, setIsSearchingUser] = useState(false);
@@ -53,6 +96,7 @@ const AdminTabs = () => {
   // Estados para gerenciamento de admin
   const [adminEmail, setAdminEmail] = useState('');
   const [adminReason, setAdminReason] = useState('');
+
   const [isPromotingAdmin, setIsPromotingAdmin] = useState(false);
   const [adminSearchResult, setAdminSearchResult] = useState<any>(null);
   const [isSearchingAdmin, setIsSearchingAdmin] = useState(false);
@@ -68,11 +112,11 @@ const AdminTabs = () => {
     const fetchUsers = async () => {
       try {
         setUsersLoading(true);
-        const allUsers = await getAllUsers();
+        const allUsers = await getAdminUsers();
         setUsers(allUsers);
       } catch (error) {
         console.error('Erro ao buscar usuários:', error);
-        toast.error('Erro ao carregar usuários');
+        // Removido toast de erro para melhor UX
       } finally {
         setUsersLoading(false);
       }
@@ -87,9 +131,11 @@ const AdminTabs = () => {
       try {
         setHistoryLoading(true);
         const history = await getPlanChangeHistory();
-        setPlanChangeHistory(history.sort((a, b) => 
-          b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime()
-        ));
+        setPlanChangeHistory(history.sort((a, b) => {
+          const dateA = (a.createdAt as any)?.toDate ? (a.createdAt as any).toDate() : new Date(a.createdAt);
+          const dateB = (b.createdAt as any)?.toDate ? (b.createdAt as any).toDate() : new Date(b.createdAt);
+          return dateB.getTime() - dateA.getTime();
+        }));
       } catch (error) {
         console.error('Erro ao buscar histórico:', error);
       } finally {
@@ -112,12 +158,16 @@ const AdminTabs = () => {
         ]);
         
         setAdminsList(admins);
-        setAdminPromotionHistory(promotions.sort((a, b) => 
-          b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime()
-        ));
-        setAdminDemotionHistory(demotions.sort((a, b) => 
-          b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime()
-        ));
+        setAdminPromotionHistory(promotions.sort((a, b) => {
+          const dateA = a.createdAt.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
+          const dateB = b.createdAt.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
+          return dateB.getTime() - dateA.getTime();
+        }));
+        setAdminDemotionHistory(demotions.sort((a, b) => {
+          const dateA = a.createdAt.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
+          const dateB = b.createdAt.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
+          return dateB.getTime() - dateA.getTime();
+        }));
       } catch (error) {
         console.error('Erro ao buscar dados de admin:', error);
       } finally {
@@ -141,7 +191,7 @@ const AdminTabs = () => {
 
   const handleUserSearch = async () => {
     if (!userEmail.trim()) {
-      toast.error('Por favor, insira um email válido');
+      // Removido toast de erro para melhor UX
       return;
     }
 
@@ -149,10 +199,15 @@ const AdminTabs = () => {
       setIsSearchingUser(true);
       const user = await findUserByEmail(userEmail.trim());
       setUserSearchResult(user);
-      setSelectedPlan(user.currentPlan);
+      if (user) {
+        setSelectedPlan(user.currentPlan);
+      } else {
+        setSelectedPlan('');
+      }
     } catch (error) {
       setUserSearchResult(null);
-      toast.error(error instanceof Error ? error.message : 'Erro ao buscar usuário');
+      setSelectedPlan('');
+      // Removido toast de erro para melhor UX
     } finally {
       setIsSearchingUser(false);
     }
@@ -180,25 +235,29 @@ const AdminTabs = () => {
         userSearchResult.email,
         selectedPlan,
         user?.email || '',
-        changeReason || undefined
+        changeReason || undefined,
+        subscriptionMonths || undefined
       );
 
       // Limpar formulário
       setUserEmail('');
       setSelectedPlan('');
       setChangeReason('');
+      setSubscriptionMonths(0);
       setUserSearchResult(null);
 
       // Atualizar dados
       refetch();
-      const allUsers = await getAllUsers();
+      const allUsers = await getAdminUsers();
       setUsers(allUsers);
 
       // Atualizar histórico
       const history = await getPlanChangeHistory();
-      setPlanChangeHistory(history.sort((a, b) => 
-        b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime()
-      ));
+      setPlanChangeHistory(history.sort((a, b) => {
+        const dateA = (a.createdAt as any)?.toDate ? (a.createdAt as any).toDate() : new Date(a.createdAt);
+        const dateB = (b.createdAt as any)?.toDate ? (b.createdAt as any).toDate() : new Date(b.createdAt);
+        return dateB.getTime() - dateA.getTime();
+      }));
 
     } catch (error) {
       console.error('Erro ao atualizar plano:', error);
@@ -209,7 +268,7 @@ const AdminTabs = () => {
 
   const handleAdminSearch = async () => {
     if (!adminEmail.trim()) {
-      toast.error('Por favor, insira um email válido');
+      // Removido toast de erro para melhor UX
       return;
     }
 
@@ -219,7 +278,7 @@ const AdminTabs = () => {
       setAdminSearchResult(foundUser);
     } catch (error) {
       setAdminSearchResult(null);
-      toast.error(error instanceof Error ? error.message : 'Erro ao buscar usuário');
+      // Removido toast de erro para melhor UX
     } finally {
       setIsSearchingAdmin(false);
     }
@@ -252,12 +311,16 @@ const AdminTabs = () => {
       ]);
       
       setAdminsList(admins);
-      setAdminPromotionHistory(promotions.sort((a, b) => 
-        b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime()
-      ));
-      setAdminDemotionHistory(demotions.sort((a, b) => 
-        b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime()
-      ));
+      setAdminPromotionHistory(promotions.sort((a, b) => {
+        const dateA = a.createdAt.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
+        const dateB = b.createdAt.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
+        return dateB.getTime() - dateA.getTime();
+      }));
+      setAdminDemotionHistory(demotions.sort((a, b) => {
+        const dateA = a.createdAt.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
+        const dateB = b.createdAt.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
+        return dateB.getTime() - dateA.getTime();
+      }));
 
     } catch (error) {
       console.error('Erro ao promover usuário:', error);
@@ -281,9 +344,11 @@ const AdminTabs = () => {
       ]);
       
       setAdminsList(admins);
-      setAdminDemotionHistory(demotions.sort((a, b) => 
-        b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime()
-      ));
+      setAdminDemotionHistory(demotions.sort((a, b) => {
+        const dateA = a.createdAt.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
+        const dateB = b.createdAt.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
+        return dateB.getTime() - dateA.getTime();
+      }));
 
     } catch (error) {
       console.error('Erro ao remover privilégios de admin:', error);
@@ -321,6 +386,7 @@ const AdminTabs = () => {
             Atualizar
           </Button>
         </div>
+
 
         {/* Loading ou Erro */}
         {statsError && (
@@ -514,7 +580,7 @@ const AdminTabs = () => {
                           </Badge>
                         </td>
                         <td className="p-4 text-sm text-muted-foreground">
-                          {user.createdAt ? user.createdAt.toDate().toLocaleDateString('pt-BR') : 'N/A'}
+                          {user.createdAt ? (user.createdAt.toDate ? user.createdAt.toDate().toLocaleDateString('pt-BR') : new Date(user.createdAt).toLocaleDateString('pt-BR')) : 'N/A'}
                         </td>
                         <td className="p-4">
                           <div className="flex gap-2">
@@ -541,7 +607,7 @@ const AdminTabs = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Formulário de Alteração de Plano */}
-          <Card className="p-6">
+          <Card className="p-6 relative z-50">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <UserPlus className="h-5 w-5" />
               Alterar Plano de Usuário
@@ -549,26 +615,23 @@ const AdminTabs = () => {
             
             <div className="space-y-4">
               <div>
-                <Label htmlFor="userEmail">Email do Usuário</Label>
-                <div className="flex gap-2 mt-1">
-                  <Input
-                    id="userEmail"
-                    type="email"
-                    placeholder="usuario@exemplo.com"
-                    value={userEmail}
-                    onChange={(e) => setUserEmail(e.target.value)}
+                <Label>Email do Usuário</Label>
+                <div className="mt-1">
+                  <EmailAutocomplete
+                    placeholder="Digite o email do usuário"
+                    onUserSelect={(user: UserSearchResult) => {
+                      setUserEmail(user.email);
+                      setUserSearchResult({
+                        uid: user.uid,
+                        email: user.email,
+                        displayName: user.displayName
+                      });
+                    }}
+                    onSearch={(email: string) => {
+                      setUserEmail(email);
+                      handleUserSearch();
+                    }}
                   />
-                  <Button 
-                    onClick={handleUserSearch}
-                    disabled={isSearchingUser || !userEmail.trim()}
-                    variant="outline"
-                  >
-                    {isSearchingUser ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                    ) : (
-                      <Search className="h-4 w-4" />
-                    )}
-                  </Button>
                 </div>
               </div>
 
@@ -577,13 +640,14 @@ const AdminTabs = () => {
                   <UserCheck className="h-4 w-4" />
                   <AlertDescription>
                     <div className="space-y-1">
-                      <p><strong>Nome:</strong> {userSearchResult.name}</p>
-                      <p><strong>Email:</strong> {userSearchResult.email}</p>
-                      <p><strong>Plano Atual:</strong> 
-                        <Badge className="ml-2 capitalize">
-                          {userSearchResult.currentPlan}
+                      <p><strong>Nome:</strong> {userSearchResult.name || 'Nome não informado'}</p>
+                      <p><strong>Email:</strong> {userSearchResult.email || 'Email não informado'}</p>
+                      <div className="flex items-center gap-2">
+                        <strong>Plano Atual:</strong> 
+                        <Badge className="capitalize">
+                          {(userSearchResult as any).currentPlan || 'free'}
                         </Badge>
-                      </p>
+                      </div>
                     </div>
                   </AlertDescription>
                 </Alert>
@@ -626,6 +690,25 @@ const AdminTabs = () => {
                       className="mt-1"
                     />
                   </div>
+
+                  {selectedPlan && selectedPlan !== 'free' && (
+                    <div>
+                      <Label htmlFor="subscriptionMonths">Meses de Assinatura</Label>
+                      <Input
+                        id="subscriptionMonths"
+                        type="number"
+                        placeholder="Ex: 12 (para 1 ano)"
+                        value={subscriptionMonths}
+                        onChange={(e) => setSubscriptionMonths(parseInt(e.target.value) || 0)}
+                        className="mt-1"
+                        min="1"
+                        max="120"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Deixe vazio para não definir período específico
+                      </p>
+                    </div>
+                  )}
 
                   <Button 
                     onClick={handlePlanUpdate}
@@ -688,7 +771,7 @@ const AdminTabs = () => {
                           {change.previousPlan} → {change.newPlan}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Alterado por: {change.updatedBy}
+                          Alterado por: {(change as any).updatedBy || change.changedBy}
                         </p>
                         {change.reason && (
                           <p className="text-xs text-muted-foreground">
@@ -696,7 +779,7 @@ const AdminTabs = () => {
                           </p>
                         )}
                         <p className="text-xs text-muted-foreground">
-                          {change.createdAt.toDate().toLocaleString('pt-BR')}
+                          {(change.createdAt as any)?.toDate ? (change.createdAt as any).toDate().toLocaleString('pt-BR') : new Date(change.createdAt).toLocaleString('pt-BR')}
                         </p>
                       </div>
                     </div>
@@ -708,7 +791,7 @@ const AdminTabs = () => {
         </div>
 
         {/* Gerenciamento de Administradores */}
-        <Card className="p-6">
+        <Card className="p-6 relative z-10">
           <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <Shield className="h-5 w-5" />
             Gerenciar Administradores
@@ -716,26 +799,23 @@ const AdminTabs = () => {
           
           <div className="space-y-4">
             <div>
-              <Label htmlFor="adminEmail">Email do Usuário para Promover</Label>
-              <div className="flex gap-2 mt-1">
-                <Input
-                  id="adminEmail"
-                  type="email"
-                  placeholder="usuario@exemplo.com"
-                  value={adminEmail}
-                  onChange={(e) => setAdminEmail(e.target.value)}
+              <Label>Email do Usuário para Promover</Label>
+              <div className="mt-1">
+                <EmailAutocomplete
+                  placeholder="Digite o email do usuário"
+                  onUserSelect={(user: UserSearchResult) => {
+                    setAdminEmail(user.email);
+                    setAdminSearchResult({
+                      uid: user.uid,
+                      email: user.email,
+                      displayName: user.displayName
+                    });
+                  }}
+                  onSearch={(email: string) => {
+                    setAdminEmail(email);
+                    handleAdminSearch();
+                  }}
                 />
-                <Button 
-                  onClick={handleAdminSearch}
-                  disabled={isSearchingAdmin || !adminEmail.trim()}
-                  variant="outline"
-                >
-                  {isSearchingAdmin ? (
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                  ) : (
-                    <Search className="h-4 w-4" />
-                  )}
-                </Button>
               </div>
             </div>
 

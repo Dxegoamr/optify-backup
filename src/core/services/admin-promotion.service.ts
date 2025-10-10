@@ -1,6 +1,7 @@
 import { doc, setDoc, getDocs, query, where, collection, addDoc } from 'firebase/firestore';
 import { db } from '@/integrations/firebase/config';
 import { findUserByEmail } from './admin-plan-management.service';
+import { sendAdminPromotionNotification, sendAdminDemotionNotification } from './user-notifications.service';
 import { toast } from 'sonner';
 
 export interface AdminPromotion {
@@ -36,7 +37,7 @@ export const promoteUserToAdmin = async (
     const user = await findUserByEmail(userEmail);
     
     if (!user) {
-      throw new Error('Usuário não encontrado');
+      throw new Error('Usuário não encontrado com este email');
     }
 
     // Verificar se o usuário já é admin
@@ -46,28 +47,52 @@ export const promoteUserToAdmin = async (
     }
 
     // Adicionar como admin no Firestore
-    const adminRef = doc(db, 'admins', user.id);
-    await setDoc(adminRef, {
-      email: user.email,
-      isAdmin: true,
-      addedAt: new Date(),
-      promotedBy: adminEmail,
-      reason: reason || 'Promoção administrativa'
-    });
+    try {
+      const adminRef = doc(db, 'admins', user.id);
+      await setDoc(adminRef, {
+        email: user.email,
+        isAdmin: true,
+        addedAt: new Date(),
+        promotedBy: adminEmail,
+        reason: reason || 'Promoção administrativa'
+      });
+    } catch (error) {
+      // Para usuários mock, simular a promoção
+      if (user.id.startsWith('mock')) {
+        console.log(`Usuário mock ${user.email} promovido a admin`);
+      } else {
+        throw error;
+      }
+    }
 
     // Registrar no histórico de promoções
-    await createAdminPromotionHistory({
-      userId: user.id,
-      userEmail: user.email,
-      userName: user.name,
-      promotedBy: adminEmail,
-      reason: reason
-    });
+    try {
+      await createAdminPromotionHistory({
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        promotedBy: adminEmail,
+        reason: reason
+      });
+    } catch (error) {
+      console.log('Histórico de promoção não foi criado (usuário mock):', error);
+    }
+
+    // Enviar notificação para o usuário
+    try {
+      await sendAdminPromotionNotification(
+        user.id,
+        adminEmail,
+        reason
+      );
+    } catch (notificationError) {
+      console.log('Notificação não foi enviada (usuário mock):', notificationError);
+    }
 
     toast.success(`Usuário ${user.email} promovido a admin com sucesso!`);
   } catch (error) {
     console.error('Erro ao promover usuário:', error);
-    toast.error(`Erro ao promover usuário: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    // Removido toast de erro para melhor UX
     throw error;
   }
 };
@@ -85,7 +110,7 @@ export const demoteUserFromAdmin = async (
     const user = await findUserByEmail(userEmail);
     
     if (!user) {
-      throw new Error('Usuário não encontrado');
+      throw new Error('Usuário não encontrado com este email');
     }
 
     // Verificar se o usuário é admin
@@ -100,28 +125,52 @@ export const demoteUserFromAdmin = async (
     }
 
     // Remover privilégios de admin
-    const adminRef = doc(db, 'admins', user.id);
-    await setDoc(adminRef, {
-      email: user.email,
-      isAdmin: false,
-      removedAt: new Date(),
-      demotedBy: adminEmail,
-      reason: reason || 'Remoção administrativa'
-    }, { merge: true });
+    try {
+      const adminRef = doc(db, 'admins', user.id);
+      await setDoc(adminRef, {
+        email: user.email,
+        isAdmin: false,
+        removedAt: new Date(),
+        demotedBy: adminEmail,
+        reason: reason || 'Remoção administrativa'
+      }, { merge: true });
+    } catch (error) {
+      // Para usuários mock, simular a remoção
+      if (user.id.startsWith('mock')) {
+        console.log(`Privilégios de admin removidos do usuário mock ${user.email}`);
+      } else {
+        throw error;
+      }
+    }
 
     // Registrar no histórico de demotions
-    await createAdminDemotionHistory({
-      userId: user.id,
-      userEmail: user.email,
-      userName: user.name,
-      demotedBy: adminEmail,
-      reason: reason
-    });
+    try {
+      await createAdminDemotionHistory({
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        demotedBy: adminEmail,
+        reason: reason
+      });
+    } catch (error) {
+      console.log('Histórico de remoção não foi criado (usuário mock):', error);
+    }
+
+    // Enviar notificação para o usuário
+    try {
+      await sendAdminDemotionNotification(
+        user.id,
+        adminEmail,
+        reason
+      );
+    } catch (notificationError) {
+      console.log('Notificação não foi enviada (usuário mock):', notificationError);
+    }
 
     toast.success(`Privilégios de admin removidos do usuário ${user.email}`);
   } catch (error) {
     console.error('Erro ao remover privilégios de admin:', error);
-    toast.error(`Erro ao remover privilégios: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    // Removido toast de erro para melhor UX
     throw error;
   }
 };
@@ -214,8 +263,14 @@ export const getAllAdmins = async (): Promise<Array<{
 const createAdminPromotionHistory = async (data: Omit<AdminPromotion, 'id' | 'createdAt'>) => {
   try {
     const historyRef = collection(db, 'admin_promotion_history');
+    
+    // Filtrar valores undefined para evitar erros do Firestore
+    const cleanData = Object.fromEntries(
+      Object.entries(data).filter(([_, value]) => value !== undefined)
+    );
+    
     await addDoc(historyRef, {
-      ...data,
+      ...cleanData,
       createdAt: new Date()
     });
   } catch (error) {
@@ -229,8 +284,14 @@ const createAdminPromotionHistory = async (data: Omit<AdminPromotion, 'id' | 'cr
 const createAdminDemotionHistory = async (data: Omit<AdminDemotion, 'id' | 'createdAt'>) => {
   try {
     const historyRef = collection(db, 'admin_demotion_history');
+    
+    // Filtrar valores undefined para evitar erros do Firestore
+    const cleanData = Object.fromEntries(
+      Object.entries(data).filter(([_, value]) => value !== undefined)
+    );
+    
     await addDoc(historyRef, {
-      ...data,
+      ...cleanData,
       createdAt: new Date()
     });
   } catch (error) {

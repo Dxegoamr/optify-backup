@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
+import { usePlanLimitations } from '@/hooks/usePlanLimitations';
 import { 
   LayoutDashboard, 
   Users, 
@@ -38,18 +39,26 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, isAdmin, logout } = useFirebaseAuth();
+  const { canAccess, currentPlan } = usePlanLimitations();
 
   const navItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
-    { icon: Users, label: 'Funcionários', path: '/gestao-funcionarios' },
-    { icon: DollarSign, label: 'Pagamentos', path: '/pagamentos' },
-    { icon: FileText, label: 'Resumo do Dia', path: '/resumo-dia' },
-    { icon: PieChart, label: 'Saldos', path: '/saldos' },
-    { icon: TrendingUp, label: 'Relatórios', path: '/relatorios' },
-    { icon: Calendar, label: 'Histórico', path: '/historico' },
-    { icon: Gift, label: 'Afiliados', path: '/afiliados' },
-    ...(isAdmin ? [{ icon: Shield, label: 'Admin', path: '/admin' }] : []),
-  ];
+    { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', requiredFeature: 'dashboard' },
+    { icon: Users, label: 'Funcionários', path: '/gestao-funcionarios', requiredFeature: 'dashboard' },
+    { icon: DollarSign, label: 'Pagamentos', path: '/pagamentos', requiredFeature: 'payments' },
+    { icon: FileText, label: 'Resumo do Dia', path: '/resumo-dia', requiredFeature: 'dailySummary' },
+    { icon: PieChart, label: 'Saldos', path: '/saldos', requiredFeature: 'balances' },
+    { icon: TrendingUp, label: 'Relatórios', path: '/relatorios', requiredFeature: 'reports' },
+    { icon: Calendar, label: 'Histórico', path: '/historico', requiredFeature: 'history' },
+    { icon: Gift, label: 'Afiliados', path: '/afiliados', requiredFeature: 'dashboard' },
+    // FORÇAR ADMIN PARA diegkamor@gmail.com TEMPORARIAMENTE
+    ...((isAdmin || user?.email === 'diegkamor@gmail.com') ? [{ icon: Shield, label: 'Admin', path: '/admin', requiredFeature: 'advancedPanel' }] : []),
+  ].filter(item => {
+    // Para admins hardcoded, sempre permitir acesso ao admin
+    if (item.path === '/admin' && (isAdmin || user?.email === 'diegkamor@gmail.com')) {
+      return true;
+    }
+    return canAccess(item.requiredFeature as any);
+  });
 
   const bottomNavItems = [
     { icon: UserCircle, label: 'Perfil', path: '/perfil' },
@@ -89,7 +98,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           </button>
           <div className="px-4 py-2 rounded-xl bg-primary/10 border border-primary/20">
             <p className="text-xs text-muted-foreground mb-1">Plano Atual</p>
-            <p className="text-sm font-bold text-primary capitalize">Free</p>
+            <p className="text-sm font-bold text-primary capitalize">{currentPlan}</p>
           </div>
         </div>
         

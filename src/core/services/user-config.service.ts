@@ -4,6 +4,7 @@ export interface UserConfig {
   monthlyGoal: number;
   selectedPlatforms: string[];
   setupCompleted: boolean;
+  currentPlan: 'free' | 'standard' | 'medium' | 'ultimate';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -25,6 +26,15 @@ export class UserConfigService {
       userId, 
       USER_SUBCOLLECTIONS.CONFIG, 
       this.docId
+    );
+  }
+
+  static async updateUserPlan(userId: string, newPlan: 'free' | 'standard' | 'medium' | 'ultimate'): Promise<void> {
+    return UserSubcollectionsService.updateUserSubcollection(
+      userId, 
+      USER_SUBCOLLECTIONS.CONFIG, 
+      this.docId, 
+      { currentPlan: newPlan }
     );
   }
 

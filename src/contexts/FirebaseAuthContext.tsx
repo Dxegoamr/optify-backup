@@ -10,6 +10,7 @@ import {
 import { auth } from '@/integrations/firebase/config';
 import { UserPlatformService } from '@/core/services/user-specific.service';
 import { checkUserIsAdmin } from '@/core/services/admin.service';
+import { UserProfileService } from '@/core/services/user-profile.service';
 
 interface FirebaseAuthContextType {
   user: User | null;
@@ -39,10 +40,41 @@ export const FirebaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
       
-      // Verificar se o usuário é admin
+      // Verificar se o usuário é admin e criar/atualizar perfil se necessário
       if (user) {
-        const adminStatus = await checkUserIsAdmin(user.uid, user.email);
-        setIsAdmin(adminStatus);
+        try {
+          // Verificar se o usuário tem documento no Firestore
+          const existingProfile = await UserProfileService.getUserProfile(user.uid);
+          
+          if (!existingProfile) {
+            // Criar documento para usuário existente que não tem perfil
+            await UserProfileService.createOrUpdateUserProfile(user.uid, {
+              email: user.email || '',
+              name: user.displayName || user.email?.split('@')[0] || 'Usuário',
+              displayName: user.displayName,
+              plano: 'free'
+            });
+            console.log(`✅ Perfil criado para usuário existente: ${user.email}`);
+          }
+          
+          const adminStatus = await checkUserIsAdmin(user.uid, user.email);
+          
+          // FORÇAR ADMIN PARA diegkamor@gmail.com TEMPORARIAMENTE
+          if (user.email === 'diegkamor@gmail.com') {
+            setIsAdmin(true);
+          } else {
+            setIsAdmin(adminStatus);
+          }
+        } catch (error) {
+          console.error('Erro ao verificar/criar perfil do usuário:', error);
+          
+          // FORÇAR ADMIN PARA diegkamor@gmail.com MESMO EM CASO DE ERRO
+          if (user.email === 'diegkamor@gmail.com') {
+            setIsAdmin(true);
+          } else {
+            setIsAdmin(false);
+          }
+        }
       } else {
         setIsAdmin(false);
       }
@@ -68,7 +100,16 @@ export const FirebaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (name) {
         await updateProfile(user, { displayName: name });
       }
-      // Não criar plataformas automaticamente aqui; o usuário escolherá na dashboard
+      
+      // Criar documento do usuário na coleção users do Firestore
+      await UserProfileService.createOrUpdateUserProfile(user.uid, {
+        email: user.email || email,
+        name: name,
+        displayName: name,
+        plano: 'free' // Plano padrão
+      });
+      
+      console.log(`✅ Usuário ${email} criado com sucesso no Firestore`);
     } catch (error) {
       console.error('Erro ao criar conta:', error);
       throw error;

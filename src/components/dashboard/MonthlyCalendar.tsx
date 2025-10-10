@@ -1,10 +1,12 @@
 import { useState, useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Lock } from 'lucide-react';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
 import { useTransactions, useAllDailySummaries } from '@/hooks/useFirestore';
 import { getCurrentDateInSaoPaulo, formatDateInSaoPaulo } from '@/utils/timezone';
+import { usePlanLimitations } from '@/hooks/usePlanLimitations';
+import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import DayTransactionsModal from './DayTransactionsModal';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isToday, isPast } from 'date-fns';
@@ -14,6 +16,7 @@ const MonthlyCalendar = () => {
   const [currentDate, setCurrentDate] = useState(getCurrentDateInSaoPaulo());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const { user } = useFirebaseAuth();
+  const { canEditPreviousCalendarDays } = usePlanLimitations();
 
   // Buscar histórico de dias fechados (como no Optify original)
   const { data: historicalSummaries = [] } = useAllDailySummaries(user?.uid || '');
@@ -119,6 +122,20 @@ const MonthlyCalendar = () => {
 
   const handleDayClick = (day: number) => {
     const clickedDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Para planos Free e Standard, permitir apenas o dia atual
+    if (!canEditPreviousCalendarDays()) {
+      if (clickedDate.getTime() !== today.getTime()) {
+        const message = clickedDate < today
+          ? 'Edição de dias passados disponível apenas no plano Medium ou superior. Faça upgrade para acessar esta funcionalidade.'
+          : 'Edição de dias futuros disponível apenas no plano Medium ou superior. Faça upgrade para acessar esta funcionalidade.';
+        toast.error(message);
+        return;
+      }
+    }
+    
     setSelectedDate(clickedDate);
   };
 
@@ -166,10 +183,14 @@ const MonthlyCalendar = () => {
           {Array.from({ length: daysInMonth }).map((_, i) => {
             const day = i + 1;
             const profit = getProfitForDay(day);
-            const isToday = new Date().getDate() === day &&
-              new Date().getMonth() === currentDate.getMonth() &&
-              new Date().getFullYear() === currentDate.getFullYear();
-            const isPast = new Date(currentDate.getFullYear(), currentDate.getMonth(), day) < new Date(new Date().setHours(0, 0, 0, 0));
+            const dayDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            const isToday = dayDate.getTime() === today.getTime();
+            const isPast = dayDate < today;
+            const isFuture = dayDate > today;
+            const isBlocked = !canEditPreviousCalendarDays() && (isPast || isFuture);
 
             return (
               <button
@@ -184,6 +205,13 @@ const MonthlyCalendar = () => {
               >
                 {/* Número do dia no canto superior direito */}
                 <div className="absolute top-2 right-2 text-lg font-bold text-primary group-hover:text-black transition-colors duration-200">{day}</div>
+                
+                {/* Ícone de bloqueio apenas para dias passados bloqueados */}
+                {isBlocked && (
+                  <div className="absolute top-2 left-2">
+                    <Lock className="h-3 w-3 text-muted-foreground" />
+                  </div>
+                )}
                 
                 {/* Conteúdo do lucro/prejuízo no centro */}
                 {profit !== undefined && (

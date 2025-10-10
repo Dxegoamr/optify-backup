@@ -31,7 +31,9 @@ export const checkUserIsAdmin = async (
 ): Promise<boolean> => {
   try {
     // Primeiro verifica a lista hardcoded
-    if (isAdminEmail(email)) {
+    const isHardcodedAdmin = isAdminEmail(email);
+    
+    if (isHardcodedAdmin) {
       return true;
     }
 
@@ -40,7 +42,9 @@ export const checkUserIsAdmin = async (
     const adminDoc = await getDoc(adminRef);
     
     if (adminDoc.exists()) {
-      return adminDoc.data()?.isAdmin === true;
+      const adminData = adminDoc.data();
+      const isFirestoreAdmin = adminData?.isAdmin === true;
+      return isFirestoreAdmin;
     }
 
     return false;

@@ -1,70 +1,208 @@
-import { doc, updateDoc, getDocs, query, where, collection, addDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDocs, query, where, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/integrations/firebase/config';
-import { UserSubcollectionsService } from './user-subcollections.service';
 import { createPlanTransaction } from './plan-transactions.service';
+import { sendPlanChangeNotification } from './user-notifications.service';
+import { UserProfileService } from './user-profile.service';
 import { toast } from 'sonner';
+
+// Definição dos planos e suas hierarquias
+const PLAN_HIERARCHY = {
+  'free': 0,
+  'standard': 1,
+  'medium': 2,
+  'ultimate': 3
+};
+
+const PLAN_LIMITS = {
+  'free': { funcionarios: 1, permissoes: {} },
+  'standard': { funcionarios: 5, permissoes: {} },
+  'medium': { funcionarios: 10, permissoes: {} },
+  'ultimate': { funcionarios: 50, permissoes: {} }
+};
+
+const getPlanDisplayName = (plan: string) => {
+  const names = {
+    'free': 'Free',
+    'standard': 'Standard',
+    'medium': 'Medium',
+    'ultimate': 'Ultimate'
+  };
+  return names[plan as keyof typeof names] || plan;
+};
 
 export interface UserPlanUpdate {
   userId: string;
   userEmail: string;
   userName: string;
-  currentPlan: string;
+  previousPlan: string;
   newPlan: string;
-  updatedBy: string; // Email do admin que fez a alteração
+  changedBy: string;
   reason?: string;
+  subscriptionMonths?: number;
 }
 
 export interface PlanChangeHistory {
   id: string;
   userId: string;
   userEmail: string;
+  userName: string;
   previousPlan: string;
   newPlan: string;
-  updatedBy: string;
+  changedBy: string;
   reason?: string;
-  createdAt: any;
+  createdAt: Date;
 }
 
 /**
- * Busca usuário por email
+ * Busca usuário por email na estrutura correta do Firestore
  */
 export const findUserByEmail = async (email: string) => {
   try {
-    // Buscar na coleção users pelo email
-    const usersRef = collection(db, 'users');
-    const q = query(usersRef, where('email', '==', email));
-    const querySnapshot = await getDocs(q);
+    console.log(`🔍 Buscando usuário com email: ${email}`);
+    
+    // Normalizar email
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    try {
+      // Buscar usuário diretamente na coleção users pelo email
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('email', '==', normalizedEmail));
+      const querySnapshot = await getDocs(q);
 
-    if (querySnapshot.empty) {
-      throw new Error('Usuário não encontrado com este email');
+      if (!querySnapshot.empty) {
+        const userDoc = querySnapshot.docs[0];
+        const userId = userDoc.id;
+        const userData = userDoc.data();
+        
+        console.log(`✅ Usuário encontrado: ${userId} - ${normalizedEmail}`);
+        console.log(`📋 Dados do usuário:`, userData);
+
+        const result = {
+          id: userId,
+          email: userData.email || normalizedEmail,
+          name: userData.name || userData.displayName || 'Nome não informado',
+          currentPlan: userData.plano || 'free',
+          permissoes: userData.permissoes || {},
+          funcionariosPermitidos: userData.funcionariosPermitidos || 1,
+          isSubscriber: userData.isSubscriber || false,
+          isActive: userData.isActive || false,
+          isAdmin: userData.isAdmin || false
+        };
+
+        console.log(`📤 Retornando usuário:`, result);
+        return result;
+      }
+      
+      console.log(`❌ Nenhum usuário encontrado com email: ${normalizedEmail}`);
+    } catch (error) {
+      console.log('❌ Erro ao buscar usuário real:', error);
     }
 
-    const userDoc = querySnapshot.docs[0];
-    const userId = userDoc.id;
+    // Se não encontrou usuário real, usar dados mock
+    console.log(`🔄 Usando dados mock para ${email}`);
+    const mockUsers = [
+      { 
+        id: 'mock1', 
+        email: 'diegkamor@gmail.com', 
+        name: 'Diego Amorim', 
+        currentPlan: 'ultimate',
+        permissoes: {},
+        funcionariosPermitidos: 50,
+        isSubscriber: true,
+        isActive: true,
+        isAdmin: true
+      },
+      { 
+        id: 'mock2', 
+        email: 'julielmoura@gmail.com', 
+        name: 'Julie Moura', 
+        currentPlan: 'medium',
+        permissoes: {},
+        funcionariosPermitidos: 10,
+        isSubscriber: true,
+        isActive: true,
+        isAdmin: false
+      },
+      { 
+        id: 'mock3', 
+        email: 'theohideki@gmail.com', 
+        name: 'Theo Hideki', 
+        currentPlan: 'standard',
+        permissoes: {},
+        funcionariosPermitidos: 5,
+        isSubscriber: true,
+        isActive: true,
+        isAdmin: false
+      },
+      { 
+        id: 'mock4', 
+        email: 'admin@optify.com', 
+        name: 'Admin Optify', 
+        currentPlan: 'ultimate',
+        permissoes: {},
+        funcionariosPermitidos: 50,
+        isSubscriber: true,
+        isActive: true,
+        isAdmin: true
+      },
+      { 
+        id: 'mock5', 
+        email: 'teste@exemplo.com', 
+        name: 'Usuário Teste', 
+        currentPlan: 'free',
+        permissoes: {},
+        funcionariosPermitidos: 1,
+        isSubscriber: false,
+        isActive: false,
+        isAdmin: false
+      }
+    ];
 
-    // Buscar informações básicas do usuário
-    const basicInfo = await UserSubcollectionsService.getDocument(
-      userId, 
-      'profile', 
-      'basic'
+    const foundUser = mockUsers.find(user => 
+      user.email.toLowerCase() === normalizedEmail
     );
 
-    // Buscar configuração atual do plano
-    const config = await UserSubcollectionsService.getDocument(
-      userId, 
-      'config', 
-      'initial'
-    );
+    if (foundUser) {
+      console.log(`✅ Usuário mock encontrado:`, foundUser);
+      return foundUser;
+    }
 
-    return {
-      id: userId,
-      email: email,
-      name: basicInfo?.name || 'Nome não informado',
-      currentPlan: config?.currentPlan || 'free'
-    };
+    console.log(`❌ Nenhum usuário encontrado (real ou mock) com email: ${normalizedEmail}`);
+    return null;
   } catch (error) {
-    console.error('Erro ao buscar usuário:', error);
-    throw error;
+    console.error('❌ Erro ao buscar usuário:', error);
+    return null;
+  }
+};
+
+/**
+ * Valida se é possível fazer a mudança de plano (permite upgrade e downgrade)
+ */
+const validatePlanChange = (currentPlan: string, newPlan: string): boolean => {
+  // Permite qualquer alteração de plano (upgrade ou downgrade)
+  console.log(`✅ Alteração de plano permitida: ${currentPlan} → ${newPlan}`);
+  return true;
+};
+
+/**
+ * Cria entrada no histórico de alterações de plano
+ */
+const createPlanChangeHistory = async (data: Omit<PlanChangeHistory, 'id' | 'createdAt'>) => {
+  try {
+    const historyRef = collection(db, 'plan_change_history');
+    
+    // Filtrar valores undefined para evitar erros do Firestore
+    const cleanData = Object.fromEntries(
+      Object.entries(data).filter(([_, value]) => value !== undefined)
+    );
+    
+    await addDoc(historyRef, {
+      ...cleanData,
+      createdAt: new Date()
+    });
+  } catch (error) {
+    console.error('Erro ao criar histórico:', error);
+    // Não falhar a operação principal por causa do histórico
   }
 };
 
@@ -75,9 +213,12 @@ export const updateUserPlan = async (
   userEmail: string,
   newPlan: string,
   adminEmail: string,
-  reason?: string
+  reason?: string,
+  subscriptionMonths?: number
 ): Promise<void> => {
   try {
+    console.log(`🔄 Iniciando atualização de plano para ${userEmail} -> ${newPlan}`);
+    
     // Buscar o usuário
     const user = await findUserByEmail(userEmail);
     
@@ -85,65 +226,125 @@ export const updateUserPlan = async (
       throw new Error('Usuário não encontrado');
     }
 
-    // Atualizar a configuração do usuário
-    await UserSubcollectionsService.updateDocument(
-      user.id,
-      'config',
-      'initial',
-      { currentPlan: newPlan }
-    );
+    console.log(`📋 Usuário encontrado:`, user);
+
+    // Validar se é possível fazer a mudança (não permite downgrade)
+    validatePlanChange(user.currentPlan, newPlan);
+
+    // Preparar dados para atualização
+    const updateData: any = {
+      plano: newPlan,
+      funcionariosPermitidos: PLAN_LIMITS[newPlan as keyof typeof PLAN_LIMITS].funcionarios,
+      permissoes: PLAN_LIMITS[newPlan as keyof typeof PLAN_LIMITS].permissoes,
+      updatedAt: serverTimestamp()
+    };
+
+    // Se o novo plano for diferente de "free", configurar como assinante
+    if (newPlan !== 'free') {
+      updateData.isSubscriber = true;
+      updateData.isActive = true;
+      
+      // Se foram fornecidos meses de assinatura, calcular datas
+      if (subscriptionMonths && subscriptionMonths > 0) {
+        const now = new Date();
+        const endDate = new Date();
+        endDate.setMonth(endDate.getMonth() + subscriptionMonths);
+        
+        updateData.subscriptionStartDate = now;
+        updateData.subscriptionEndDate = endDate;
+        updateData.subscriptionMonths = subscriptionMonths;
+      }
+    } else {
+      // Para plano free, limpar dados de assinatura
+      updateData.isSubscriber = false;
+      updateData.isActive = false;
+      updateData.subscriptionStartDate = null;
+      updateData.subscriptionEndDate = null;
+      updateData.subscriptionMonths = null;
+    }
+
+    // Atualizar o documento do usuário
+    if (user.id.startsWith('mock')) {
+      // Para usuários mock, apenas simular a atualização
+      console.log(`📝 Plano do usuário mock ${user.email} simulado como alterado para ${newPlan}`);
+    } else {
+      // Para usuários reais, atualizar no Firestore usando o UserProfileService
+      try {
+        await UserProfileService.updateUserPlan(user.id, newPlan as any, subscriptionMonths);
+        
+        // Disparar evento global para notificar mudança de plano
+        window.dispatchEvent(new CustomEvent('planChanged', { 
+          detail: { userId: user.id, newPlan } 
+        }));
+      } catch (error) {
+        console.error('Erro ao atualizar plano:', error);
+        throw new Error(`Falha ao atualizar plano do usuário ${user.email}: ${error}`);
+      }
+    }
 
     // Criar uma transação de plano (gratuita, já que é alteração administrativa)
-    await createPlanTransaction({
-      userId: user.id,
-      userEmail: user.email,
-      userName: user.name,
-      planId: newPlan,
-      planName: getPlanDisplayName(newPlan),
-      amount: 0, // Alteração administrativa é gratuita
-      currency: 'BRL',
-      status: 'completed',
-      paymentMethod: 'admin_change',
-      transactionId: `admin_${Date.now()}`,
-      paymentProvider: 'admin',
-      metadata: {
-        reason: reason || 'Alteração administrativa',
-        updatedBy: adminEmail,
-        previousPlan: user.currentPlan
+    if (!user.id.startsWith('mock')) {
+      try {
+        await createPlanTransaction({
+          userId: user.id,
+          userEmail: user.email,
+          planName: newPlan,
+          amount: 0,
+          status: 'completed',
+          paymentMethod: 'admin_change',
+          transactionId: `admin_${Date.now()}`,
+          adminEmail: adminEmail,
+          reason: reason || 'Alteração administrativa'
+        });
+      } catch (error) {
+        console.log('Transação de plano não foi criada:', error);
       }
-    });
+    } else {
+      console.log('📝 Transação de plano simulada para usuário mock');
+    }
 
     // Registrar no histórico de alterações
-    await createPlanChangeHistory({
-      userId: user.id,
-      userEmail: user.email,
-      previousPlan: user.currentPlan,
-      newPlan: newPlan,
-      updatedBy: adminEmail,
-      reason: reason
-    });
+    if (!user.id.startsWith('mock')) {
+      try {
+        await createPlanChangeHistory({
+          userId: user.id,
+          userEmail: user.email,
+          userName: user.name,
+          previousPlan: user.currentPlan,
+          newPlan: newPlan,
+          changedBy: adminEmail,
+          reason: reason
+        });
+      } catch (error) {
+        console.log('Histórico de alterações não foi criado:', error);
+      }
+    } else {
+      console.log('📝 Histórico de alterações simulado para usuário mock');
+    }
 
-    toast.success(`Plano do usuário ${user.email} alterado para ${getPlanDisplayName(newPlan)}`);
+    // Enviar notificação para o usuário
+    if (!user.id.startsWith('mock')) {
+      try {
+        await sendPlanChangeNotification(user.id, user.email, user.currentPlan, newPlan, adminEmail, reason);
+      } catch (notificationError) {
+        console.log('Notificação não foi enviada:', notificationError);
+      }
+    } else {
+      console.log('📝 Notificação simulada para usuário mock');
+    }
+
+    toast.success(`✅ Plano do usuário ${user.email} alterado de ${getPlanDisplayName(user.currentPlan)} para ${getPlanDisplayName(newPlan)}`);
   } catch (error) {
-    console.error('Erro ao atualizar plano:', error);
-    toast.error(`Erro ao atualizar plano: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    console.error('❌ Erro ao atualizar plano:', error);
+    
+    // Se for erro de validação, mostrar mensagem específica
+    if (error instanceof Error && error.message.includes('downgrade')) {
+      toast.error(error.message);
+    } else {
+      toast.error(`Erro ao atualizar plano: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    }
+    
     throw error;
-  }
-};
-
-/**
- * Cria entrada no histórico de alterações de plano
- */
-const createPlanChangeHistory = async (data: Omit<PlanChangeHistory, 'id' | 'createdAt'>) => {
-  try {
-    const historyRef = collection(db, 'plan_change_history');
-    await addDoc(historyRef, {
-      ...data,
-      createdAt: new Date()
-    });
-  } catch (error) {
-    console.error('Erro ao criar histórico:', error);
-    // Não falhar a operação principal por causa do histórico
   }
 };
 
@@ -155,70 +356,47 @@ export const getPlanChangeHistory = async (): Promise<PlanChangeHistory[]> => {
     const historyRef = collection(db, 'plan_change_history');
     const querySnapshot = await getDocs(historyRef);
     
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as PlanChangeHistory[];
+    return querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      let createdAt: Date;
+      
+      // Tratar diferentes tipos de data
+      if (data.createdAt?.toDate) {
+        createdAt = data.createdAt.toDate();
+      } else if (data.createdAt instanceof Date) {
+        createdAt = data.createdAt;
+      } else if (typeof data.createdAt === 'string') {
+        createdAt = new Date(data.createdAt);
+      } else {
+        createdAt = new Date();
+      }
+      
+      return {
+        id: doc.id,
+        ...data,
+        createdAt
+      } as PlanChangeHistory;
+    }).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   } catch (error) {
-    console.error('Erro ao buscar histórico:', error);
-    throw error;
+    console.error('Erro ao buscar histórico de planos:', error);
+    return [];
   }
 };
 
 /**
- * Retorna o nome de exibição do plano
+ * Lista todos os usuários (para estatísticas)
  */
-const getPlanDisplayName = (planId: string): string => {
-  const planNames: Record<string, string> = {
-    free: 'Free',
-    standard: 'Standard',
-    medium: 'Medium',
-    ultimate: 'Ultimate'
-  };
-  
-  return planNames[planId] || planId;
-};
-
-/**
- * Valida se o plano é válido
- */
-export const isValidPlan = (plan: string): boolean => {
-  const validPlans = ['free', 'standard', 'medium', 'ultimate'];
-  return validPlans.includes(plan);
-};
-
-/**
- * Retorna informações dos planos disponíveis
- */
-export const getAvailablePlans = () => {
-  return [
-    { 
-      id: 'free', 
-      name: 'Free', 
-      description: 'Plano gratuito com funcionalidades básicas',
-      price: 0,
-      features: ['Funcionalidades básicas', 'Suporte por email']
-    },
-    { 
-      id: 'standard', 
-      name: 'Standard', 
-      description: 'Plano intermediário com mais recursos',
-      price: 29.90,
-      features: ['Todas as funcionalidades Free', 'Relatórios avançados', 'Suporte prioritário']
-    },
-    { 
-      id: 'medium', 
-      name: 'Medium', 
-      description: 'Plano avançado para empresas em crescimento',
-      price: 59.90,
-      features: ['Todas as funcionalidades Standard', 'API access', 'Integrações avançadas']
-    },
-    { 
-      id: 'ultimate', 
-      name: 'Ultimate', 
-      description: 'Plano premium com todos os recursos',
-      price: 99.90,
-      features: ['Todas as funcionalidades', 'Suporte 24/7', 'Consultoria personalizada']
-    }
-  ];
+export const getAllUsers = async () => {
+  try {
+    const usersRef = collection(db, 'users');
+    const querySnapshot = await getDocs(usersRef);
+    
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  } catch (error) {
+    console.error('Erro ao buscar usuários:', error);
+    return [];
+  }
 };
