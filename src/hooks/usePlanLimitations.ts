@@ -12,9 +12,21 @@ import {
 } from '@/core/services/plan-limitations.service';
 import { isAdminEmail } from '@/core/services/admin.service';
 
+// Cache de plano em memória para evitar "flicker" ao trocar de abas
+const planCache = new Map<string, string>();
+
 export const usePlanLimitations = () => {
   const { user } = useFirebaseAuth();
-  const [currentPlan, setCurrentPlan] = useState<string>('free');
+  
+  // Inicializar com o valor do cache se existir
+  const getCachedPlan = () => {
+    if (user?.uid) {
+      return planCache.get(user.uid) || 'free';
+    }
+    return 'free';
+  };
+  
+  const [currentPlan, setCurrentPlan] = useState<string>(getCachedPlan);
   const [limitations, setLimitations] = useState<PlanLimitations | null>(null);
   const [loading, setLoading] = useState(true);
   const [employeeCount, setEmployeeCount] = useState(0);
@@ -28,11 +40,18 @@ export const usePlanLimitations = () => {
       }
 
       try {
-        setLoading(true);
+        // Não mostrar loading se já temos o plano em cache
+        const hasCachedPlan = planCache.has(user.uid);
+        if (!hasCachedPlan) {
+          setLoading(true);
+        }
         
         // Buscar perfil do usuário para obter o plano atual direto do documento users/{uid}
         const profile = await UserProfileService.getUserProfile(user.uid);
         const userPlan = profile?.plano || 'free';
+        
+        // Atualizar cache
+        planCache.set(user.uid, userPlan);
         
         setCurrentPlan(userPlan);
 
@@ -44,7 +63,10 @@ export const usePlanLimitations = () => {
         setLoading(false);
       } catch (error) {
         console.error('Erro ao buscar plano do usuário:', error);
-        setCurrentPlan('free');
+        // Manter plano em cache se houver erro
+        if (!planCache.has(user.uid)) {
+          setCurrentPlan('free');
+        }
         setLoading(false);
       }
     };
@@ -57,8 +79,11 @@ export const usePlanLimitations = () => {
     const handlePlanChange = (event: CustomEvent) => {
       const { userId, newPlan } = event.detail;
       
-      // Se a mudança foi para o usuário atual, recarregar o plano
+      // Se a mudança foi para o usuário atual, atualizar cache e recarregar
       if (user && userId === user.uid) {
+        // Atualizar cache imediatamente
+        planCache.set(userId, newPlan);
+        setCurrentPlan(newPlan);
         setRefreshKey(prev => prev + 1);
       }
     };
