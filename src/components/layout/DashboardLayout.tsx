@@ -15,7 +15,8 @@ import {
   Shield,
   UserCircle,
   Gift,
-  Clock
+  Clock,
+  Crown
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -49,6 +50,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     { icon: PieChart, label: 'Saldos', path: '/saldos', requiredFeature: 'balances' },
     { icon: TrendingUp, label: 'Relatórios', path: '/relatorios', requiredFeature: 'reports' },
     { icon: Calendar, label: 'Histórico', path: '/historico', requiredFeature: 'history' },
+    { icon: Crown, label: 'Planos', path: '/planos', requiredFeature: 'dashboard' },
     { icon: Gift, label: 'Afiliados', path: '/afiliados', requiredFeature: 'dashboard' },
     // FORÇAR ADMIN PARA diegkamor@gmail.com TEMPORARIAMENTE
     ...((isAdmin || user?.email === 'diegkamor@gmail.com') ? [{ icon: Shield, label: 'Admin', path: '/admin', requiredFeature: 'advancedPanel' }] : []),
