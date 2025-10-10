@@ -11,5 +11,59 @@ service cloud.firestore {
     match /{document=**} {
       allow read, write: if true;
     }
+
+    // Regras específicas para transações de planos
+    match /transactions_plans/{transactionId} {
+      // Apenas usuários autenticados podem criar transações
+      allow create: if request.auth != null;
+      
+      // Usuários podem ler suas próprias transações
+      allow read: if request.auth != null && 
+                     (resource.data.userId == request.auth.uid || 
+                      isAdmin(request.auth.token.email));
+      
+      // Apenas admins podem atualizar transações
+      allow update: if request.auth != null && 
+                       isAdmin(request.auth.token.email);
+      
+      // Apenas admins podem deletar transações
+      allow delete: if request.auth != null && 
+                       isAdmin(request.auth.token.email);
+    }
+
+    // Regras para histórico de alterações de planos
+    match /plan_change_history/{historyId} {
+      // Apenas admins podem criar e ler o histórico
+      allow create, read: if request.auth != null && 
+                             isAdmin(request.auth.token.email);
+      
+      // Ninguém pode atualizar ou deletar o histórico
+      allow update, delete: if false;
+    }
+
+    // Regras para promoções de administradores
+    match /admin_promotion_history/{historyId} {
+      // Apenas admins podem criar e ler o histórico
+      allow create, read: if request.auth != null && 
+                             isAdmin(request.auth.token.email);
+      
+      // Ninguém pode atualizar ou deletar o histórico
+      allow update, delete: if false;
+    }
+
+    // Regras para demotions de administradores
+    match /admin_demotion_history/{historyId} {
+      // Apenas admins podem criar e ler o histórico
+      allow create, read: if request.auth != null && 
+                             isAdmin(request.auth.token.email);
+      
+      // Ninguém pode atualizar ou deletar o histórico
+      allow update, delete: if false;
+    }
+
+    // Função helper para verificar se é admin
+    function isAdmin(email) {
+      return email in ['diegkamor@gmail.com'];
+    }
   }
 }

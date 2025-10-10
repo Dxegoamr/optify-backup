@@ -37,7 +37,7 @@ interface DashboardLayoutProps {
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useFirebaseAuth();
+  const { user, isAdmin, logout } = useFirebaseAuth();
 
   const navItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
@@ -48,7 +48,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     { icon: TrendingUp, label: 'Relatórios', path: '/relatorios' },
     { icon: Calendar, label: 'Histórico', path: '/historico' },
     { icon: Gift, label: 'Afiliados', path: '/afiliados' },
-    ...(user?.isAdmin ? [{ icon: Shield, label: 'Admin', path: '/admin' }] : []),
+    ...(isAdmin ? [{ icon: Shield, label: 'Admin', path: '/admin' }] : []),
   ];
 
   const bottomNavItems = [

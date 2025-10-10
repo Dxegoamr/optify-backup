@@ -9,10 +9,12 @@ import {
 } from 'firebase/auth';
 import { auth } from '@/integrations/firebase/config';
 import { UserPlatformService } from '@/core/services/user-specific.service';
+import { checkUserIsAdmin } from '@/core/services/admin.service';
 
 interface FirebaseAuthContextType {
   user: User | null;
   loading: boolean;
+  isAdmin: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -31,10 +33,20 @@ export const useFirebaseAuth = () => {
 export const FirebaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
+      
+      // Verificar se o usuário é admin
+      if (user) {
+        const adminStatus = await checkUserIsAdmin(user.uid, user.email);
+        setIsAdmin(adminStatus);
+      } else {
+        setIsAdmin(false);
+      }
+      
       setLoading(false);
     });
 
@@ -75,6 +87,7 @@ export const FirebaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const value = {
     user,
     loading,
+    isAdmin,
     signIn,
     signUp,
     logout
