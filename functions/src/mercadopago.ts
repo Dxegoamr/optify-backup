@@ -67,23 +67,24 @@ export const createPaymentPreference = functions.https.onRequest(async (req, res
     return;
   }
 
-  // Carregar variáveis de ambiente após CORS
-  const MP_ACCESS_TOKEN = functions.config().mercadopago?.access_token || process.env.MERCADO_PAGO_ACCESS_TOKEN;
-  const BASE_URL_FRONTEND = functions.config().app?.base_url_frontend || process.env.BASE_URL_FRONTEND;
-  
-  if (!MP_ACCESS_TOKEN || !BASE_URL_FRONTEND) {
-    console.error('Variáveis de ambiente não encontradas:', { MP_ACCESS_TOKEN: !!MP_ACCESS_TOKEN, BASE_URL_FRONTEND: !!BASE_URL_FRONTEND });
-    res.status(500).json({ error: 'Configuração do servidor incompleta' });
-    return;
-  }
-
-  if (req.method !== 'POST') {
-    res.status(405).send('Method Not Allowed');
-    return;
-  }
   try {
+    // Carregar variáveis de ambiente
+    const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN || "APP_USR-5496244105993399-070119-b9bec860fcf72e513a288bf609f3700c-454772336";
+    const BASE_URL_FRONTEND = process.env.BASE_URL_FRONTEND || "https://optify-definitivo.web.app/";
+    
+    if (!MP_ACCESS_TOKEN || !BASE_URL_FRONTEND) {
+      res.status(500).json({ error: 'Configuração do servidor incompleta' });
+      return;
+    }
+
+    if (req.method !== 'POST') {
+      res.status(405).send('Method Not Allowed');
+      return;
+    }
+
     const { userId, userEmail, userName, planId, billingType } = req.body;
     const plan = PLANOS[planId as PlanId];
+    
     if (!plan) {
       res.status(400).json({ error: 'Plano inválido' });
       return;
@@ -120,6 +121,7 @@ export const createPaymentPreference = functions.https.onRequest(async (req, res
     });
 
     const data = await resp.json();
+    
     if (!resp.ok) {
       res.status(500).json({ error: data });
       return;
@@ -137,8 +139,8 @@ export const createPaymentPreference = functions.https.onRequest(async (req, res
       id: data.id,
     });
     return;
-  } catch (err) {
-    console.error(err);
+  } catch (err: any) {
+    console.error('Erro na função createPaymentPreference:', err);
     res.status(500).json({ error: 'Internal Server Error' });
     return;
   }
