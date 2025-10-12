@@ -7,12 +7,6 @@ if (!admin.apps.length) admin.initializeApp();
 const auth = admin.auth();
 const db = admin.firestore();
 
-interface DeleteUserRequest {
-  targetUserId: string;
-  reason?: string;
-  confirmation?: boolean;
-}
-
 interface DeleteUserResponse {
   success: boolean;
   message: string;
@@ -184,7 +178,8 @@ export const deleteUserCompletely = onCall(
       } catch (error) {
         logger.error('Erro ao excluir usuário do Firebase Auth:', error);
         // Não falhar a operação se o usuário já foi excluído do Auth
-        if (error.code !== 'auth/user-not-found') {
+        const err = error as any;
+        if (err.code !== 'auth/user-not-found') {
           throw error;
         }
       }

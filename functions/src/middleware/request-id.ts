@@ -1,6 +1,6 @@
-import { Request, Response } from 'firebase-functions';
 import { logger } from 'firebase-functions';
 import * as crypto from 'crypto';
+import type { Request, Response } from 'express';
 
 /**
  * Gera um requestId único para correlação de logs
@@ -17,31 +17,18 @@ export function withRequestId(
 ) {
   return async (req: Request, res: Response) => {
     // Gerar ou obter requestId do header
-    const requestId = (req.header('x-request-id') as string) || generateRequestId();
-
-    // Adicionar ao contexto de logs
-    logger.setContext({ requestId });
+    const requestId = req.get('x-request-id') || generateRequestId();
 
     // Adicionar ao header de resposta para correlação
     res.setHeader('x-request-id', requestId);
 
-    // Adicionar breadcrumb no Sentry
-    try {
-      const Sentry = await import('../observability/sentry');
-      Sentry.default.addBreadcrumb({
-        category: 'request',
-        message: `Request ${req.method} ${req.path}`,
-        data: {
-          requestId,
-          method: req.method,
-          path: req.path,
-          ip: req.ip,
-        },
-        level: 'info',
-      });
-    } catch (error) {
-      // Sentry pode não estar configurado
-    }
+    // TODO: Adicionar breadcrumb no Sentry após instalar @sentry/node
+    // try {
+    //   const Sentry = await import('../observability/sentry');
+    //   Sentry.default.addBreadcrumb({...});
+    // } catch (error) {
+    //   // Sentry pode não estar configurado
+    // }
 
     // Log inicial da requisição
     logger.info('Request received', {
@@ -83,9 +70,6 @@ export function withRequestIdCallable<T = any>(
   return async (data: T, context: any) => {
     const requestId = generateRequestId();
 
-    // Adicionar ao contexto de logs
-    logger.setContext({ requestId });
-
     // Log inicial
     logger.info('Callable function invoked', {
       requestId,
@@ -93,21 +77,13 @@ export function withRequestIdCallable<T = any>(
       email: context.auth?.token?.email,
     });
 
-    // Adicionar breadcrumb no Sentry
-    try {
-      const Sentry = await import('../observability/sentry');
-      Sentry.default.addBreadcrumb({
-        category: 'callable',
-        message: 'Callable function invoked',
-        data: {
-          requestId,
-          uid: context.auth?.uid,
-        },
-        level: 'info',
-      });
-    } catch (error) {
-      // Sentry pode não estar configurado
-    }
+    // TODO: Adicionar breadcrumb no Sentry após instalar @sentry/node
+    // try {
+    //   const Sentry = await import('../observability/sentry');
+    //   Sentry.default.addBreadcrumb({...});
+    // } catch (error) {
+    //   // Sentry pode não estar configurado
+    // }
 
     try {
       // Executar handler

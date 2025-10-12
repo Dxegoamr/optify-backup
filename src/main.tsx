@@ -2,9 +2,9 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 import { configureTimezone } from "./utils/timezone";
-import { initSentry, SentryProvider } from "./observability/sentry";
+import { initSentry } from "./observability/sentry";
 
-// Inicializar Sentry antes de qualquer coisa
+// Inicializar Sentry
 initSentry();
 
 // Configurar o fuso horário padrão do sistema
@@ -24,7 +24,5 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
 }
 
 createRoot(document.getElementById("root")!).render(
-  <SentryProvider>
-    <App />
-  </SentryProvider>
+  <App />
 );

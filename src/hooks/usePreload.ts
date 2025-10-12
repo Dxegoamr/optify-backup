@@ -10,7 +10,6 @@ export const usePreload = () => {
     switch (routePath) {
       case '/admin':
         import('../pages/Admin');
-        import('../components/admin');
         break;
       case '/relatorios':
         import('../pages/Relatorios');
@@ -30,7 +29,6 @@ export const usePreload = () => {
         break;
       case '/dashboard':
         import('../pages/Dashboard');
-        import('../components/dashboard');
         break;
       default:
         break;

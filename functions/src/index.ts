@@ -1,8 +1,8 @@
 import { setGlobalOptions } from "firebase-functions";
-import { initSentry } from "./observability/sentry";
 
-// Inicializar Sentry antes de qualquer coisa
-initSentry();
+// TODO: Habilitar após instalar @sentry/node
+// import { initSentry } from "./observability/sentry";
+// initSentry();
 
 // For cost control, you can set the maximum number of containers that can be
 // running at the same time. This helps mitigate the impact of unexpected

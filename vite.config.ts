@@ -29,10 +29,6 @@ export default defineConfig(({ mode }) => ({
           'firebase-vendor': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/functions'],
           'ui-vendor': ['@tanstack/react-query', 'sonner', 'lucide-react'],
           'chart-vendor': ['recharts', 'html2canvas'],
-          // Feature chunks
-          'admin': ['./src/pages/Admin', './src/components/admin'],
-          'dashboard': ['./src/pages/Dashboard', './src/components/dashboard'],
-          'reports': ['./src/pages/Relatorios', './src/pages/Historico'],
         },
         // Nomes de arquivos com hash para cache busting
         chunkFileNames: 'assets/[name]-[hash].js',

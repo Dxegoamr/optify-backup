@@ -1,5 +1,6 @@
 import * as crypto from 'crypto';
-import { onRequest, onSchedule } from 'firebase-functions/v2/https';
+import { onRequest } from 'firebase-functions/v2/https';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { logger } from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { RateLimiter, RateLimitPresets, isBlacklisted, blacklistIp } from '../middleware/rate-limiter';
@@ -309,7 +310,6 @@ async function handleRateLimitAbuse(ip: string): Promise<void> {
  */
 export const mercadoPagoWebhook = onRequest(
   {
-    enforceAppCheck: false, // Webhooks externos não têm App Check
     memory: '512MiB',
     timeoutSeconds: 60,
   },

@@ -1,6 +1,6 @@
-import { Request, Response } from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { logger } from 'firebase-functions';
+import type { Request, Response } from 'express';
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
