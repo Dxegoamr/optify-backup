@@ -21,6 +21,13 @@ export interface AdminStats {
   totalUsers: number;
   activeUsers: number;
   totalRevenue: number;
+  revenueToday: number;
+  revenueWeek: number;
+  revenueMonth: number;
+  bestDay: {
+    date: string;
+    revenue: number;
+  };
   growthRate: number;
   planDistribution: {
     free: number;
@@ -43,6 +50,7 @@ export interface AdminUser {
   status: 'active' | 'inactive';
   createdAt: any;
   lastLogin?: any;
+  planExpirationDate?: any;
 }
 
 /**
@@ -97,7 +105,8 @@ export const getAllUsers = async (): Promise<AdminUser[]> => {
         plan: userData.plano || 'free',
         status: userData.isActive ? 'active' : 'inactive',
         createdAt: userData.createdAt,
-        lastLogin: userData.lastLoginAt
+        lastLogin: userData.lastLoginAt,
+        planExpirationDate: userData.subscriptionEndDate
       });
     }
 
@@ -147,10 +156,60 @@ export const getAdminStats = async (): Promise<AdminStats> => {
     const totalUsers = users.length;
     const activeUsers = users.filter(u => u.status === 'active').length;
 
-    // Calcular receita total das transações completadas
-    const totalRevenue = transactions
-      .filter(t => t.status === 'completed')
+    // Calcular receitas por período
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekAgo = new Date(today);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const monthAgo = new Date(today);
+    monthAgo.setMonth(monthAgo.getMonth() - 1);
+
+    const completedTransactions = transactions.filter(t => t.status === 'completed');
+    
+    // Receita total
+    const totalRevenue = completedTransactions.reduce((sum, t) => sum + t.amount, 0);
+    
+    // Receita hoje
+    const revenueToday = completedTransactions
+      .filter(t => {
+        const transactionDate = t.createdAt?.toDate ? t.createdAt.toDate() : new Date(t.createdAt);
+        return transactionDate >= today;
+      })
       .reduce((sum, t) => sum + t.amount, 0);
+    
+    // Receita da semana
+    const revenueWeek = completedTransactions
+      .filter(t => {
+        const transactionDate = t.createdAt?.toDate ? t.createdAt.toDate() : new Date(t.createdAt);
+        return transactionDate >= weekAgo;
+      })
+      .reduce((sum, t) => sum + t.amount, 0);
+    
+    // Receita do mês
+    const revenueMonth = completedTransactions
+      .filter(t => {
+        const transactionDate = t.createdAt?.toDate ? t.createdAt.toDate() : new Date(t.createdAt);
+        return transactionDate >= monthAgo;
+      })
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    // Melhor dia
+    const dailyRevenues = new Map<string, number>();
+    completedTransactions.forEach(t => {
+      const transactionDate = t.createdAt?.toDate ? t.createdAt.toDate() : new Date(t.createdAt);
+      const dateKey = transactionDate.toISOString().split('T')[0];
+      dailyRevenues.set(dateKey, (dailyRevenues.get(dateKey) || 0) + t.amount);
+    });
+
+    let bestDay = { date: 'N/A', revenue: 0 };
+    for (const [date, revenue] of dailyRevenues.entries()) {
+      if (revenue > bestDay.revenue) {
+        bestDay = {
+          date: new Date(date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+          revenue
+        };
+      }
+    }
 
     // Calcular distribuição de planos
     const planDistribution = users.reduce((acc, user) => {
@@ -175,6 +234,10 @@ export const getAdminStats = async (): Promise<AdminStats> => {
       totalUsers,
       activeUsers,
       totalRevenue,
+      revenueToday,
+      revenueWeek,
+      revenueMonth,
+      bestDay,
       growthRate,
       planDistribution,
       recentActivity

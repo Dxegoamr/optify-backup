@@ -156,15 +156,19 @@ const Perfil = () => {
               <p className="text-xl font-bold capitalize">{currentPlan}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground mb-1">Próximo Pagamento</p>
-              <p className="text-xl font-bold">01/11/2024</p>
+              <p className="text-sm text-muted-foreground mb-1">
+                {currentPlan === 'free' ? 'Status' : 'Plano expira em'}
+              </p>
+              <p className="text-xl font-bold">
+                {currentPlan === 'free' ? 'Ativo' : '31/12/2025'}
+              </p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground mb-1">Valor Mensal</p>
               <p className="text-xl font-bold">
                 {currentPlan === 'free' ? 'Grátis' : 
-                 currentPlan === 'standard' ? 'R$ 49' :
-                 currentPlan === 'medium' ? 'R$ 99' : 'R$ 199'}
+                 currentPlan === 'standard' ? 'R$ 1,00' :
+                 currentPlan === 'medium' ? 'R$ 49,90' : 'R$ 99,90'}
               </p>
             </div>
           </div>

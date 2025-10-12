@@ -110,7 +110,8 @@ export const findUserByEmail = async (email: string) => {
         funcionariosPermitidos: 50,
         isSubscriber: true,
         isActive: true,
-        isAdmin: true
+        isAdmin: true,
+        subscriptionEndDate: new Date('2025-12-31')
       },
       { 
         id: 'mock2', 
@@ -121,7 +122,8 @@ export const findUserByEmail = async (email: string) => {
         funcionariosPermitidos: 10,
         isSubscriber: true,
         isActive: true,
-        isAdmin: false
+        isAdmin: false,
+        subscriptionEndDate: new Date('2025-11-15')
       },
       { 
         id: 'mock3', 
@@ -132,7 +134,8 @@ export const findUserByEmail = async (email: string) => {
         funcionariosPermitidos: 5,
         isSubscriber: true,
         isActive: true,
-        isAdmin: false
+        isAdmin: false,
+        subscriptionEndDate: new Date('2025-10-30')
       },
       { 
         id: 'mock4', 
@@ -143,7 +146,8 @@ export const findUserByEmail = async (email: string) => {
         funcionariosPermitidos: 50,
         isSubscriber: true,
         isActive: true,
-        isAdmin: true
+        isAdmin: true,
+        subscriptionEndDate: new Date('2025-12-31')
       },
       { 
         id: 'mock5', 
@@ -154,7 +158,8 @@ export const findUserByEmail = async (email: string) => {
         funcionariosPermitidos: 1,
         isSubscriber: false,
         isActive: false,
-        isAdmin: false
+        isAdmin: false,
+        subscriptionEndDate: null
       }
     ];
 

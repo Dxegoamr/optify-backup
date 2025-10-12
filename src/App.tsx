@@ -35,13 +35,14 @@ import PaymentResult from "./pages/payment/PaymentResult";
 const queryClient = new QueryClient();
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <FirebaseAuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-          <Routes>
+  <div className="min-h-screen overflow-x-hidden">
+    <QueryClientProvider client={queryClient}>
+      <FirebaseAuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+            <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
@@ -77,6 +78,7 @@ const App = () => (
       </TooltipProvider>
     </FirebaseAuthProvider>
   </QueryClientProvider>
+  </div>
 );
 
 export default App;

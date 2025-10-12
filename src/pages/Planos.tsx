@@ -176,7 +176,7 @@ const Planos = () => {
       value: 'ultimate',
       price: 99.90,
       period: 'mês',
-      annualPrice: 1018.32,
+      annualPrice: 1.00, // Preço de teste
       features: planFeatures.ultimate,
       current: currentPlan === 'ultimate',
       popular: false,
@@ -203,12 +203,12 @@ const Planos = () => {
           </div>
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           {plans.map((plan) => (
             <Card
               key={plan.name}
               className={`
-                p-6 relative shadow-card card-hover
+                p-6 relative shadow-card card-hover flex flex-col h-full
                 ${plan.popular ? 'border-primary border-2' : ''}
                 ${isPlanLower(plan.value) ? 'opacity-60' : ''}
               `}
@@ -224,26 +224,28 @@ const Planos = () => {
                 </Badge>
               )}
 
-              <div className="space-y-6">
-                <div>
+              <div className="flex flex-col h-full space-y-6">
+                <div className="flex-shrink-0">
                   <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>
                   <p className="text-sm text-muted-foreground mb-3">{plan.description}</p>
                   <div className="flex items-baseline gap-1">
                     <span className="text-4xl font-bold">
-                      R$ {(isAnnual ? plan.annualPrice : plan.price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      R$ {(isAnnual ? (plan.annualPrice / 12) : plan.price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </span>
                     {plan.price > 0 && (
-                      <span className="text-muted-foreground">/{isAnnual ? 'ano' : plan.period}</span>
+                      <span className="text-muted-foreground">/{plan.period}</span>
                     )}
                   </div>
                   {isAnnual && plan.price > 0 && (
                     <p className="text-xs text-muted-foreground mt-1">
+                      Valor anual: R$ {plan.annualPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      <br />
                       Economia de R$ {((plan.price * 12) - plan.annualPrice).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </p>
                   )}
                 </div>
 
-                <div className="space-y-3">
+                <div className="flex-grow space-y-3">
                   {plan.features.map((feature, i) => (
                     <div key={i} className="flex items-start gap-2">
                       {feature.blocked ? (
@@ -261,25 +263,27 @@ const Planos = () => {
                   ))}
                 </div>
 
-                <Button
-                  className="w-full"
-                  variant={plan.current ? 'outline' : 'default'}
-                  disabled={plan.current || createPreferenceMutation.isPending || isPlanLower(plan.value)}
-                  onClick={() => !plan.current && !isPlanLower(plan.value) && handleAssinar(plan.value)}
-                >
-                  {createPreferenceMutation.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Redirecionando...
-                    </>
-                  ) : plan.current ? (
-                    'Plano Atual'
-                  ) : isPlanLower(plan.value) ? (
-                    'Plano Menor'
-                  ) : (
-                    'Assinar'
-                  )}
-                </Button>
+                <div className="flex-shrink-0">
+                  <Button
+                    className="w-full"
+                    variant={plan.current ? 'outline' : 'default'}
+                    disabled={plan.current || createPreferenceMutation.isPending || isPlanLower(plan.value)}
+                    onClick={() => !plan.current && !isPlanLower(plan.value) && handleAssinar(plan.value)}
+                  >
+                    {createPreferenceMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Redirecionando...
+                      </>
+                    ) : plan.current ? (
+                      'Plano Atual'
+                    ) : isPlanLower(plan.value) ? (
+                      'Plano Menor'
+                    ) : (
+                      'Assinar'
+                    )}
+                  </Button>
+                </div>
               </div>
             </Card>
           ))}

@@ -31,6 +31,7 @@ import {
   AdminPromotion,
   AdminDemotion
 } from '@/core/services/admin-promotion.service';
+import { deleteUserCompletely, canDeleteUser } from '@/core/services/user-deletion.service';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, CheckCircle, Clock, UserCheck, Edit, Eye, X } from 'lucide-react';
 import EmailAutocomplete from '@/components/ui/email-autocomplete';
@@ -77,7 +78,7 @@ const isValidPlan = (plan: string): boolean => {
 };
 
 const AdminTabs = () => {
-  const { user, isAdmin } = useFirebaseAuth();
+  const { user: currentUser, isAdmin } = useFirebaseAuth();
   const { stats, loading: statsLoading, error: statsError, refetch } = useAdminData();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(true);
@@ -110,6 +111,10 @@ const AdminTabs = () => {
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<AdminUser | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const availablePlans = getAvailablePlans();
 
@@ -240,7 +245,7 @@ const AdminTabs = () => {
       await updateUserPlan(
         userSearchResult.email,
         selectedPlan,
-        user?.email || '',
+        currentUser?.email || '',
         changeReason || undefined,
         subscriptionMonths || undefined
       );
@@ -300,7 +305,7 @@ const AdminTabs = () => {
       setIsPromotingAdmin(true);
       await promoteUserToAdmin(
         adminSearchResult.email,
-        user?.email || '',
+        currentUser?.email || '',
         adminReason || undefined
       );
 
@@ -339,7 +344,7 @@ const AdminTabs = () => {
     try {
       await demoteUserFromAdmin(
         targetEmail,
-        user?.email || '',
+        currentUser?.email || '',
         'Remoção via painel administrativo'
       );
 
@@ -376,6 +381,67 @@ const AdminTabs = () => {
     setSelectedUser(null);
     setEditModalOpen(false);
     setDetailsModalOpen(false);
+    setDeleteModalOpen(false);
+    setUserToDelete(null);
+    setDeleteConfirmation('');
+  };
+
+  const handleDeleteUser = (user: AdminUser) => {
+    setUserToDelete(user);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!userToDelete) return;
+    
+    if (deleteConfirmation.toLowerCase() !== 'excluir') {
+      toast.error('Digite "excluir" para confirmar a exclusão');
+      return;
+    }
+
+    // Verificar se pode excluir o usuário
+    if (!canDeleteUser(userToDelete.id, currentUser?.uid)) {
+      toast.error('Não é possível excluir este usuário');
+      return;
+    }
+
+    try {
+      setIsDeleting(true);
+      
+      // Para usuários mock, apenas simular a exclusão
+      if (userToDelete.id.startsWith('mock')) {
+        console.log(`📝 Exclusão simulada para usuário mock: ${userToDelete.email}`);
+        toast.success(`Usuário ${userToDelete.email} excluído com sucesso (simulação)`);
+      } else {
+        // Para usuários reais, usar o serviço de exclusão
+        const result = await deleteUserCompletely(
+          userToDelete.id,
+          userToDelete.email,
+          currentUser?.email || undefined
+        );
+
+        if (result.success) {
+          toast.success(result.message);
+          console.log(`✅ Exclusão concluída:`, result.deletedData);
+        } else {
+          toast.error(result.message);
+          return;
+        }
+      }
+
+      // Atualizar a lista de usuários
+      const allUsers = await getAdminUsers();
+      setUsers(allUsers);
+
+      // Fechar modal e limpar estados
+      handleCloseModals();
+      
+    } catch (error) {
+      console.error('Erro ao excluir usuário:', error);
+      toast.error('Erro ao excluir usuário. Tente novamente.');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -415,151 +481,195 @@ const AdminTabs = () => {
         </div>
 
         {/* Métricas Principais em Tempo Real */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="p-6 border-l-4 border-l-emerald-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Receita Hoje</p>
-                <p className="text-2xl font-bold text-emerald-600">R$ 1,00</p>
-                <p className="text-xs text-muted-foreground">+100% vs ontem</p>
+        {statsLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+            {[...Array(4)].map((_, i) => (
+              <Card key={i} className="p-6">
+                <div className="animate-pulse">
+                  <div className="h-4 bg-muted rounded w-1/2 mb-2"></div>
+                  <div className="h-8 bg-muted rounded w-3/4 mb-2"></div>
+                  <div className="h-3 bg-muted rounded w-1/3"></div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        ) : stats ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+            <Card className="p-6 border-l-4 border-l-emerald-500">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Receita Hoje</p>
+                  <p className="text-2xl font-bold text-emerald-600">
+                    R$ {stats.revenueToday.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {stats.revenueToday > 0 ? 'Receitas do dia atual' : 'Nenhuma receita hoje'}
+                  </p>
+                </div>
+                <DollarSign className="h-8 w-8 text-emerald-500" />
               </div>
-              <DollarSign className="h-8 w-8 text-emerald-500" />
-            </div>
-          </Card>
+            </Card>
 
-          <Card className="p-6 border-l-4 border-l-blue-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Receita Semana</p>
-                <p className="text-2xl font-bold text-blue-600">R$ 7,00</p>
-                <p className="text-xs text-muted-foreground">+700% vs semana anterior</p>
+            <Card className="p-6 border-l-4 border-l-blue-500">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Receita Semana</p>
+                  <p className="text-2xl font-bold text-blue-600">
+                    R$ {stats.revenueWeek.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Últimos 7 dias
+                  </p>
+                </div>
+                <TrendingUp className="h-8 w-8 text-blue-500" />
               </div>
-              <TrendingUp className="h-8 w-8 text-blue-500" />
-            </div>
-          </Card>
+            </Card>
 
-          <Card className="p-6 border-l-4 border-l-purple-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Receita Mês</p>
-                <p className="text-2xl font-bold text-purple-600">R$ 30,00</p>
-                <p className="text-xs text-muted-foreground">+3000% vs mês anterior</p>
+            <Card className="p-6 border-l-4 border-l-purple-500">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Receita Mês</p>
+                  <p className="text-2xl font-bold text-purple-600">
+                    R$ {stats.revenueMonth.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Últimos 30 dias
+                  </p>
+                </div>
+                <BarChart3 className="h-8 w-8 text-purple-500" />
               </div>
-              <BarChart3 className="h-8 w-8 text-purple-500" />
-            </div>
-          </Card>
+            </Card>
 
-          <Card className="p-6 border-l-4 border-l-orange-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Melhor Dia</p>
-                <p className="text-2xl font-bold text-orange-600">12/10</p>
-                <p className="text-xs text-muted-foreground">R$ 1,00 em vendas</p>
+            <Card className="p-6 border-l-4 border-l-orange-500">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Melhor Dia</p>
+                  <p className="text-2xl font-bold text-orange-600">{stats.bestDay.date}</p>
+                  <p className="text-xs text-muted-foreground">
+                    R$ {stats.bestDay.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} em vendas
+                  </p>
+                </div>
+                <Activity className="h-8 w-8 text-orange-500" />
               </div>
-              <Activity className="h-8 w-8 text-orange-500" />
-            </div>
-          </Card>
-        </div>
+            </Card>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+            <Card className="p-6 border-l-4 border-l-emerald-500">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Receita Hoje</p>
+                  <p className="text-2xl font-bold text-emerald-600">R$ 0,00</p>
+                  <p className="text-xs text-muted-foreground">Nenhuma receita hoje</p>
+                </div>
+                <DollarSign className="h-8 w-8 text-emerald-500" />
+              </div>
+            </Card>
+
+            <Card className="p-6 border-l-4 border-l-blue-500">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Receita Semana</p>
+                  <p className="text-2xl font-bold text-blue-600">R$ 0,00</p>
+                  <p className="text-xs text-muted-foreground">Últimos 7 dias</p>
+                </div>
+                <TrendingUp className="h-8 w-8 text-blue-500" />
+              </div>
+            </Card>
+
+            <Card className="p-6 border-l-4 border-l-purple-500">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Receita Mês</p>
+                  <p className="text-2xl font-bold text-purple-600">R$ 0,00</p>
+                  <p className="text-xs text-muted-foreground">Últimos 30 dias</p>
+                </div>
+                <BarChart3 className="h-8 w-8 text-purple-500" />
+              </div>
+            </Card>
+
+            <Card className="p-6 border-l-4 border-l-orange-500">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Melhor Dia</p>
+                  <p className="text-2xl font-bold text-orange-600">N/A</p>
+                  <p className="text-xs text-muted-foreground">Nenhuma receita registrada</p>
+                </div>
+                <Activity className="h-8 w-8 text-orange-500" />
+              </div>
+            </Card>
+          </div>
+        )}
 
         {/* Gráficos e Análises */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {/* Gráfico de Receita por Mês */}
           <Card className="p-6">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <TrendingUp className="h-5 w-5" />
-              Receita por Mês (2025)
+              Receita Total: R$ {stats?.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
             </h3>
             <div className="space-y-4">
               <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                <span className="text-sm font-medium">Janeiro</span>
+                <span className="text-sm font-medium">Receita Hoje</span>
                 <div className="flex items-center gap-2">
                   <div className="w-24 h-2 bg-muted rounded-full">
-                    <div className="w-0 h-full bg-primary rounded-full"></div>
+                    <div 
+                      className="h-full bg-emerald-500 rounded-full" 
+                      style={{ width: stats ? `${Math.min((stats.revenueToday / Math.max(stats.totalRevenue, 1)) * 100, 100)}%` : '0%' }}
+                    ></div>
                   </div>
-                  <span className="text-sm text-muted-foreground">R$ 0,00</span>
+                  <span className="text-sm text-muted-foreground">
+                    R$ {stats?.revenueToday.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
+                  </span>
                 </div>
               </div>
               <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                <span className="text-sm font-medium">Fevereiro</span>
+                <span className="text-sm font-medium">Receita Semanal</span>
                 <div className="flex items-center gap-2">
                   <div className="w-24 h-2 bg-muted rounded-full">
-                    <div className="w-0 h-full bg-primary rounded-full"></div>
+                    <div 
+                      className="h-full bg-blue-500 rounded-full" 
+                      style={{ width: stats ? `${Math.min((stats.revenueWeek / Math.max(stats.totalRevenue, 1)) * 100, 100)}%` : '0%' }}
+                    ></div>
                   </div>
-                  <span className="text-sm text-muted-foreground">R$ 0,00</span>
+                  <span className="text-sm text-muted-foreground">
+                    R$ {stats?.revenueWeek.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
+                  </span>
                 </div>
               </div>
               <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                <span className="text-sm font-medium">Março</span>
+                <span className="text-sm font-medium">Receita Mensal</span>
                 <div className="flex items-center gap-2">
                   <div className="w-24 h-2 bg-muted rounded-full">
-                    <div className="w-0 h-full bg-primary rounded-full"></div>
+                    <div 
+                      className="h-full bg-purple-500 rounded-full" 
+                      style={{ width: stats ? `${Math.min((stats.revenueMonth / Math.max(stats.totalRevenue, 1)) * 100, 100)}%` : '0%' }}
+                    ></div>
                   </div>
-                  <span className="text-sm text-muted-foreground">R$ 0,00</span>
+                  <span className="text-sm text-muted-foreground">
+                    R$ {stats?.revenueMonth.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
+                  </span>
                 </div>
               </div>
               <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                <span className="text-sm font-medium">Abril</span>
+                <span className="text-sm font-medium">Melhor Dia</span>
                 <div className="flex items-center gap-2">
-                  <div className="w-24 h-2 bg-muted rounded-full">
-                    <div className="w-0 h-full bg-primary rounded-full"></div>
-                  </div>
-                  <span className="text-sm text-muted-foreground">R$ 0,00</span>
+                  <span className="text-sm font-medium text-orange-600">
+                    {stats?.bestDay.date || 'N/A'}
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    R$ {stats?.bestDay.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
+                  </span>
                 </div>
               </div>
-              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                <span className="text-sm font-medium">Maio</span>
-                <div className="flex items-center gap-2">
-                  <div className="w-24 h-2 bg-muted rounded-full">
-                    <div className="w-0 h-full bg-primary rounded-full"></div>
-                  </div>
-                  <span className="text-sm text-muted-foreground">R$ 0,00</span>
+              {stats && stats.totalRevenue === 0 && (
+                <div className="text-center py-4">
+                  <p className="text-sm text-muted-foreground">
+                    Nenhuma receita registrada ainda
+                  </p>
                 </div>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                <span className="text-sm font-medium">Junho</span>
-                <div className="flex items-center gap-2">
-                  <div className="w-24 h-2 bg-muted rounded-full">
-                    <div className="w-0 h-full bg-primary rounded-full"></div>
-                  </div>
-                  <span className="text-sm text-muted-foreground">R$ 0,00</span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                <span className="text-sm font-medium">Julho</span>
-                <div className="flex items-center gap-2">
-                  <div className="w-24 h-2 bg-muted rounded-full">
-                    <div className="w-0 h-full bg-primary rounded-full"></div>
-                  </div>
-                  <span className="text-sm text-muted-foreground">R$ 0,00</span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                <span className="text-sm font-medium">Agosto</span>
-                <div className="flex items-center gap-2">
-                  <div className="w-24 h-2 bg-muted rounded-full">
-                    <div className="w-0 h-full bg-primary rounded-full"></div>
-                  </div>
-                  <span className="text-sm text-muted-foreground">R$ 0,00</span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                <span className="text-sm font-medium">Setembro</span>
-                <div className="flex items-center gap-2">
-                  <div className="w-24 h-2 bg-muted rounded-full">
-                    <div className="w-0 h-full bg-primary rounded-full"></div>
-                  </div>
-                  <span className="text-sm text-muted-foreground">R$ 0,00</span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border-2 border-primary">
-                <span className="text-sm font-medium">Outubro</span>
-                <div className="flex items-center gap-2">
-                  <div className="w-24 h-2 bg-muted rounded-full">
-                    <div className="w-full h-full bg-primary rounded-full"></div>
-                  </div>
-                  <span className="text-sm font-semibold text-primary">R$ 1,00</span>
-                </div>
-              </div>
+              )}
             </div>
           </Card>
 
@@ -623,7 +733,7 @@ const AdminTabs = () => {
         </div>
 
         {/* Comparativos e Insights */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Crescimento de Usuários */}
           <Card className="p-6">
             <h3 className="text-lg font-semibold mb-4">Crescimento de Usuários</h3>
@@ -878,18 +988,20 @@ const AdminTabs = () => {
 
           <div className="overflow-x-auto">
             {usersLoading ? (
-              <div className="p-8 text-center">
+              <div className="p-4 sm:p-8 text-center">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
                 <p className="text-muted-foreground">Carregando usuários...</p>
               </div>
             ) : (
-              <table className="w-full">
+              <div className="min-w-full">
+                <table className="w-full">
                 <thead className="bg-muted/50">
                   <tr>
                     <th className="text-left p-4 font-semibold">Usuário</th>
                     <th className="text-left p-4 font-semibold">Email</th>
                     <th className="text-left p-4 font-semibold">Plano</th>
                     <th className="text-left p-4 font-semibold">Status</th>
+                    <th className="text-left p-4 font-semibold">Expira em</th>
                     <th className="text-left p-4 font-semibold">Registrado em</th>
                     <th className="text-left p-4 font-semibold">Ações</th>
                   </tr>
@@ -897,7 +1009,7 @@ const AdminTabs = () => {
                 <tbody>
                   {filteredUsers.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="p-8 text-center text-muted-foreground">
+                      <td colSpan={7} className="p-8 text-center text-muted-foreground">
                         {searchTerm ? 'Nenhum usuário encontrado para a busca.' : 'Nenhum usuário encontrado.'}
                       </td>
                     </tr>
@@ -918,6 +1030,15 @@ const AdminTabs = () => {
                           <Badge variant={user.status === 'active' ? 'default' : 'secondary'}>
                             {user.status === 'active' ? 'Ativo' : 'Inativo'}
                           </Badge>
+                        </td>
+                        <td className="p-4 text-sm text-muted-foreground">
+                          {user.planExpirationDate ? 
+                            (user.planExpirationDate.toDate ? 
+                              user.planExpirationDate.toDate().toLocaleDateString('pt-BR') : 
+                              new Date(user.planExpirationDate).toLocaleDateString('pt-BR')
+                            ) : 
+                            user.plan === 'free' ? 'N/A' : 'Não definido'
+                          }
                         </td>
                         <td className="p-4 text-sm text-muted-foreground">
                           {user.createdAt ? (user.createdAt.toDate ? user.createdAt.toDate().toLocaleDateString('pt-BR') : new Date(user.createdAt).toLocaleDateString('pt-BR')) : 'N/A'}
@@ -942,13 +1063,24 @@ const AdminTabs = () => {
                               <Eye className="h-3 w-3" />
                               Ver Detalhes
                             </Button>
+                            <Button 
+                              size="sm" 
+                              variant="destructive"
+                              onClick={() => handleDeleteUser(user)}
+                              className="flex items-center gap-1"
+                              disabled={!canDeleteUser(user.id, currentUser?.uid)}
+                            >
+                              <X className="h-3 w-3" />
+                              Excluir
+                            </Button>
                           </div>
                         </td>
                       </tr>
                     ))
                   )}
                 </tbody>
-              </table>
+                </table>
+              </div>
             )}
           </div>
         </Card>
@@ -1271,7 +1403,7 @@ const AdminTabs = () => {
                             : 'Data não disponível'}
                         </p>
                       </div>
-                      {admin.email !== user?.email && admin.userId !== 'hardcoded' && (
+                      {admin.email !== currentUser?.email && admin.userId !== 'hardcoded' && (
                         <Button
                           size="sm"
                           variant="destructive"
@@ -1438,6 +1570,14 @@ const AdminTabs = () => {
                         {selectedUser.status === 'active' ? 'Ativo' : 'Inativo'}
                       </Badge>
                     </div>
+                    <div><strong>Plano expira em:</strong> {
+                      selectedUser.planExpirationDate ? 
+                        (selectedUser.planExpirationDate.toDate ? 
+                          selectedUser.planExpirationDate.toDate().toLocaleDateString('pt-BR') : 
+                          new Date(selectedUser.planExpirationDate).toLocaleDateString('pt-BR')
+                        ) : 
+                        selectedUser.plan === 'free' ? 'N/A' : 'Não definido'
+                    }</div>
                     <div><strong>Registrado em:</strong> {
                       selectedUser.createdAt ? 
                         (selectedUser.createdAt.toDate ? selectedUser.createdAt.toDate().toLocaleDateString('pt-BR') : new Date(selectedUser.createdAt).toLocaleDateString('pt-BR')) 
@@ -1494,6 +1634,94 @@ const AdminTabs = () => {
                 }}>
                   <Edit className="h-4 w-4 mr-1" />
                   Editar Usuário
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Confirmação de Exclusão */}
+      <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <X className="h-5 w-5" />
+              Confirmar Exclusão de Usuário
+            </DialogTitle>
+          </DialogHeader>
+          
+          {userToDelete && (
+            <div className="space-y-4">
+              <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+                <p className="text-sm text-destructive font-medium mb-2">
+                  ⚠️ Atenção: Esta ação não pode ser desfeita
+                </p>
+                <ul className="text-xs text-muted-foreground space-y-1">
+                  <li>• Todos os dados do usuário serão excluídos permanentemente</li>
+                  <li>• Histórico de transações será removido</li>
+                  <li>• Configurações e preferências serão perdidas</li>
+                  <li>• Acesso ao sistema será revogado</li>
+                </ul>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Usuário a ser excluído:</p>
+                <div className="p-3 bg-muted/50 rounded-lg">
+                  <p className="font-medium">{userToDelete.name}</p>
+                  <p className="text-sm text-muted-foreground">{userToDelete.email}</p>
+                  <p className="text-sm text-muted-foreground">Plano: {userToDelete.plan}</p>
+                  <p className="text-sm text-muted-foreground">
+                    ID: <code className="text-xs">{userToDelete.id}</code>
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Dados que serão excluídos:</p>
+                <div className="p-3 bg-muted/50 rounded-lg space-y-1">
+                  <p className="text-sm">• Perfil e configurações do usuário</p>
+                  <p className="text-sm">• Todos os funcionários cadastrados</p>
+                  <p className="text-sm">• Histórico completo de transações</p>
+                  <p className="text-sm">• Plataformas de apostas configuradas</p>
+                  <p className="text-sm">• Histórico de alterações de plano</p>
+                  <p className="text-sm">• Acesso ao sistema será revogado</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="deleteConfirmation">
+                  Para confirmar, digite <strong>excluir</strong>:
+                </Label>
+                <Input
+                  id="deleteConfirmation"
+                  placeholder="Digite 'excluir' para confirmar"
+                  value={deleteConfirmation}
+                  onChange={(e) => setDeleteConfirmation(e.target.value)}
+                  className="border-destructive/50 focus:border-destructive"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <Button variant="outline" onClick={handleCloseModals}>
+                  Cancelar
+                </Button>
+                <Button 
+                  variant="destructive" 
+                  onClick={handleConfirmDelete}
+                  disabled={isDeleting || deleteConfirmation.toLowerCase() !== 'excluir'}
+                >
+                  {isDeleting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Excluindo...
+                    </>
+                  ) : (
+                    <>
+                      <X className="h-4 w-4 mr-1" />
+                      Excluir Usuário
+                    </>
+                  )}
                 </Button>
               </div>
             </div>
