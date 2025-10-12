@@ -199,6 +199,10 @@ export const mercadoPagoWebhook = functions.https.onRequest(async (req, res): Pr
         return;
       }
 
+      console.log('🔍 Metadata:', paymentData?.metadata);
+      console.log('🔍 Payer:', paymentData?.payer);
+      console.log('🔍 External Reference:', paymentData?.external_reference);
+
       const email = (
         paymentData?.metadata?.userEmail ||
         paymentData?.payer?.email ||
@@ -257,12 +261,18 @@ export const mercadoPagoWebhook = functions.https.onRequest(async (req, res): Pr
         console.log('🔍 Buscando usuário pelo email:', email);
         
         // 🔹 Localiza documentos existentes do usuário pelo campo email
-        const usersSnap = await db
-          .collection('users')
-          .where('email', '==', email)
-          .get();
-
-        console.log('📦 Usuários encontrados:', usersSnap.size);
+        let usersSnap;
+        try {
+          usersSnap = await db
+            .collection('users')
+            .where('email', '==', email)
+            .get();
+          console.log('📦 Usuários encontrados:', usersSnap.size);
+        } catch (error) {
+          console.error('❌ Erro ao buscar usuário:', error);
+          res.status(500).json({ error: 'Erro ao buscar usuário' });
+          return;
+        }
 
         const userUpdateData = {
           email,
@@ -284,13 +294,19 @@ export const mercadoPagoWebhook = functions.https.onRequest(async (req, res): Pr
 
         if (!usersSnap.empty) {
           // Atualiza TODOS os documentos que possuem o mesmo email
-          const batch = db.batch();
-          usersSnap.docs.forEach((docRef: FirebaseFirestore.QueryDocumentSnapshot) => {
-            batch.set(docRef.ref, userUpdateData, { merge: true });
-            console.log('📝 Atualizando documento:', docRef.id);
-          });
-          await batch.commit();
-          console.log(`✅ Usuário ${email} atualizado para plano ${planId} (${billingType}) até ${endDate.toISOString()}`);
+          try {
+            const batch = db.batch();
+            usersSnap.docs.forEach((docRef: FirebaseFirestore.QueryDocumentSnapshot) => {
+              batch.set(docRef.ref, userUpdateData, { merge: true });
+              console.log('📝 Atualizando documento:', docRef.id);
+            });
+            await batch.commit();
+            console.log(`✅ Usuário ${email} atualizado para plano ${planId} (${billingType}) até ${endDate.toISOString()}`);
+          } catch (error) {
+            console.error('❌ Erro ao atualizar usuário:', error);
+            res.status(500).json({ error: 'Erro ao atualizar usuário' });
+            return;
+          }
         } else {
           console.warn(`⚠️ Nenhum documento encontrado para email ${email}`);
         }
