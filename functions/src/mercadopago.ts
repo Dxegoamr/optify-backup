@@ -204,6 +204,7 @@ export const mercadoPagoWebhook = functions.https.onRequest(async (req, res): Pr
       console.log('🔍 External Reference:', paymentData?.external_reference);
 
       const email = (
+        paymentData?.metadata?.user_email ||
         paymentData?.metadata?.userEmail ||
         paymentData?.payer?.email ||
         ''
@@ -212,8 +213,8 @@ export const mercadoPagoWebhook = functions.https.onRequest(async (req, res): Pr
         .trim()
         .toLowerCase() || null;
       
-      const planId = paymentData?.metadata?.planId || 'standard';
-      const billingType = paymentData?.metadata?.billingType || 'monthly';
+      const planId = paymentData?.metadata?.plan_id || paymentData?.metadata?.planId || 'standard';
+      const billingType = paymentData?.metadata?.billing_type || paymentData?.metadata?.billingType || 'monthly';
       const status = paymentData?.status;
       const externalReference = paymentData?.external_reference;
 
