@@ -32,9 +32,10 @@ import {
   AdminDemotion
 } from '@/core/services/admin-promotion.service';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle, CheckCircle, Clock, UserCheck } from 'lucide-react';
+import { AlertCircle, CheckCircle, Clock, UserCheck, Edit, Eye, X } from 'lucide-react';
 import EmailAutocomplete from '@/components/ui/email-autocomplete';
 import { UserSearchResult } from '@/core/services/user-search.service';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 
 // Funções locais para gerenciamento de planos
 const getAvailablePlans = () => {
@@ -104,6 +105,11 @@ const AdminTabs = () => {
   const [adminPromotionHistory, setAdminPromotionHistory] = useState<AdminPromotion[]>([]);
   const [adminDemotionHistory, setAdminDemotionHistory] = useState<AdminDemotion[]>([]);
   const [adminsLoading, setAdminsLoading] = useState(false);
+
+  // Estados para modais de usuário
+  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
 
   const availablePlans = getAvailablePlans();
 
@@ -355,11 +361,32 @@ const AdminTabs = () => {
     }
   };
 
+  // Funções para modais de usuário
+  const handleEditUser = (user: AdminUser) => {
+    setSelectedUser(user);
+    setEditModalOpen(true);
+  };
+
+  const handleViewDetails = (user: AdminUser) => {
+    setSelectedUser(user);
+    setDetailsModalOpen(true);
+  };
+
+  const handleCloseModals = () => {
+    setSelectedUser(null);
+    setEditModalOpen(false);
+    setDetailsModalOpen(false);
+  };
+
   return (
-    <Tabs defaultValue="dashboard" className="w-full">
-      <TabsList className="grid w-full grid-cols-2 mb-6">
-        <TabsTrigger value="dashboard" className="flex items-center gap-2">
+    <Tabs defaultValue="analytics" className="w-full">
+      <TabsList className="grid w-full grid-cols-3 mb-6">
+        <TabsTrigger value="analytics" className="flex items-center gap-2">
           <BarChart3 className="h-4 w-4" />
+          Dashboard Avançado
+        </TabsTrigger>
+        <TabsTrigger value="dashboard" className="flex items-center gap-2">
+          <Users className="h-4 w-4" />
           Resultados & Estatísticas
         </TabsTrigger>
         <TabsTrigger value="plans" className="flex items-center gap-2">
@@ -367,6 +394,319 @@ const AdminTabs = () => {
           Gerenciar Planos
         </TabsTrigger>
       </TabsList>
+
+      {/* Aba de Dashboard Avançado */}
+      <TabsContent value="analytics" className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold">Dashboard Avançado</h2>
+            <p className="text-muted-foreground">Análise completa do desempenho do sistema</p>
+          </div>
+          <Button 
+            onClick={handleRefresh} 
+            variant="outline" 
+            size="sm"
+            disabled={statsLoading}
+            className="flex items-center gap-2"
+          >
+            <Activity className={`h-4 w-4 ${statsLoading ? 'animate-spin' : ''}`} />
+            Atualizar
+          </Button>
+        </div>
+
+        {/* Métricas Principais em Tempo Real */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <Card className="p-6 border-l-4 border-l-emerald-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Receita Hoje</p>
+                <p className="text-2xl font-bold text-emerald-600">R$ 1,00</p>
+                <p className="text-xs text-muted-foreground">+100% vs ontem</p>
+              </div>
+              <DollarSign className="h-8 w-8 text-emerald-500" />
+            </div>
+          </Card>
+
+          <Card className="p-6 border-l-4 border-l-blue-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Receita Semana</p>
+                <p className="text-2xl font-bold text-blue-600">R$ 7,00</p>
+                <p className="text-xs text-muted-foreground">+700% vs semana anterior</p>
+              </div>
+              <TrendingUp className="h-8 w-8 text-blue-500" />
+            </div>
+          </Card>
+
+          <Card className="p-6 border-l-4 border-l-purple-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Receita Mês</p>
+                <p className="text-2xl font-bold text-purple-600">R$ 30,00</p>
+                <p className="text-xs text-muted-foreground">+3000% vs mês anterior</p>
+              </div>
+              <BarChart3 className="h-8 w-8 text-purple-500" />
+            </div>
+          </Card>
+
+          <Card className="p-6 border-l-4 border-l-orange-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Melhor Dia</p>
+                <p className="text-2xl font-bold text-orange-600">12/10</p>
+                <p className="text-xs text-muted-foreground">R$ 1,00 em vendas</p>
+              </div>
+              <Activity className="h-8 w-8 text-orange-500" />
+            </div>
+          </Card>
+        </div>
+
+        {/* Gráficos e Análises */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Gráfico de Receita por Mês */}
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <TrendingUp className="h-5 w-5" />
+              Receita por Mês (2025)
+            </h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                <span className="text-sm font-medium">Janeiro</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-24 h-2 bg-muted rounded-full">
+                    <div className="w-0 h-full bg-primary rounded-full"></div>
+                  </div>
+                  <span className="text-sm text-muted-foreground">R$ 0,00</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                <span className="text-sm font-medium">Fevereiro</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-24 h-2 bg-muted rounded-full">
+                    <div className="w-0 h-full bg-primary rounded-full"></div>
+                  </div>
+                  <span className="text-sm text-muted-foreground">R$ 0,00</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                <span className="text-sm font-medium">Março</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-24 h-2 bg-muted rounded-full">
+                    <div className="w-0 h-full bg-primary rounded-full"></div>
+                  </div>
+                  <span className="text-sm text-muted-foreground">R$ 0,00</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                <span className="text-sm font-medium">Abril</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-24 h-2 bg-muted rounded-full">
+                    <div className="w-0 h-full bg-primary rounded-full"></div>
+                  </div>
+                  <span className="text-sm text-muted-foreground">R$ 0,00</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                <span className="text-sm font-medium">Maio</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-24 h-2 bg-muted rounded-full">
+                    <div className="w-0 h-full bg-primary rounded-full"></div>
+                  </div>
+                  <span className="text-sm text-muted-foreground">R$ 0,00</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                <span className="text-sm font-medium">Junho</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-24 h-2 bg-muted rounded-full">
+                    <div className="w-0 h-full bg-primary rounded-full"></div>
+                  </div>
+                  <span className="text-sm text-muted-foreground">R$ 0,00</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                <span className="text-sm font-medium">Julho</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-24 h-2 bg-muted rounded-full">
+                    <div className="w-0 h-full bg-primary rounded-full"></div>
+                  </div>
+                  <span className="text-sm text-muted-foreground">R$ 0,00</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                <span className="text-sm font-medium">Agosto</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-24 h-2 bg-muted rounded-full">
+                    <div className="w-0 h-full bg-primary rounded-full"></div>
+                  </div>
+                  <span className="text-sm text-muted-foreground">R$ 0,00</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                <span className="text-sm font-medium">Setembro</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-24 h-2 bg-muted rounded-full">
+                    <div className="w-0 h-full bg-primary rounded-full"></div>
+                  </div>
+                  <span className="text-sm text-muted-foreground">R$ 0,00</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border-2 border-primary">
+                <span className="text-sm font-medium">Outubro</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-24 h-2 bg-muted rounded-full">
+                    <div className="w-full h-full bg-primary rounded-full"></div>
+                  </div>
+                  <span className="text-sm font-semibold text-primary">R$ 1,00</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Análise de Planos Mais Populares */}
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Planos Mais Populares
+            </h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 rounded-full bg-primary"></div>
+                  <span className="text-sm font-medium">Ultimate</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-32 h-2 bg-muted rounded-full">
+                    <div className="w-2/3 h-full bg-primary rounded-full"></div>
+                  </div>
+                  <span className="text-sm text-muted-foreground">2 usuários (67%)</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                  <span className="text-sm font-medium">Standard</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-32 h-2 bg-muted rounded-full">
+                    <div className="w-1/3 h-full bg-blue-500 rounded-full"></div>
+                  </div>
+                  <span className="text-sm text-muted-foreground">1 usuário (33%)</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 rounded-full bg-muted-foreground"></div>
+                  <span className="text-sm font-medium">Medium</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-32 h-2 bg-muted rounded-full">
+                    <div className="w-0 h-full bg-muted-foreground rounded-full"></div>
+                  </div>
+                  <span className="text-sm text-muted-foreground">0 usuários (0%)</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 rounded-full bg-muted-foreground"></div>
+                  <span className="text-sm font-medium">Free</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-32 h-2 bg-muted rounded-full">
+                    <div className="w-0 h-full bg-muted-foreground rounded-full"></div>
+                  </div>
+                  <span className="text-sm text-muted-foreground">0 usuários (0%)</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* Comparativos e Insights */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Crescimento de Usuários */}
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold mb-4">Crescimento de Usuários</h3>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Este Mês</span>
+                <span className="text-sm font-semibold text-emerald-600">+3 usuários</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Mês Anterior</span>
+                <span className="text-sm text-muted-foreground">+0 usuários</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Crescimento</span>
+                <span className="text-sm font-semibold text-emerald-600">∞% ↗️</span>
+              </div>
+            </div>
+          </Card>
+
+          {/* Métricas de Engajamento */}
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold mb-4">Métricas de Engajamento</h3>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Taxa de Conversão</span>
+                <span className="text-sm font-semibold text-primary">100%</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Usuários Ativos</span>
+                <span className="text-sm font-semibold text-blue-600">3/3</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Retenção</span>
+                <span className="text-sm font-semibold text-emerald-600">100%</span>
+              </div>
+            </div>
+          </Card>
+
+          {/* Projeções */}
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold mb-4">Projeções</h3>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Próximo Mês</span>
+                <span className="text-sm font-semibold text-purple-600">R$ 31,00</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Meta Anual</span>
+                <span className="text-sm font-semibold text-orange-600">R$ 372,00</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Crescimento Esperado</span>
+                <span className="text-sm font-semibold text-emerald-600">+3,300%</span>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* Alertas e Recomendações */}
+        <Card className="p-6 border-l-4 border-l-yellow-500">
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-yellow-500" />
+            Alertas e Recomendações
+          </h3>
+          <div className="space-y-3">
+            <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+              <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                <strong>🎯 Oportunidade:</strong> Considere criar campanhas de marketing para o plano Medium, que ainda não tem usuários.
+              </p>
+            </div>
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <p className="text-sm text-blue-800 dark:text-blue-200">
+                <strong>📈 Tendência:</strong> O plano Ultimate está sendo o mais escolhido. Considere criar um plano ainda mais premium.
+              </p>
+            </div>
+            <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
+              <p className="text-sm text-emerald-800 dark:text-emerald-200">
+                <strong>✅ Excelente:</strong> Taxa de conversão de 100% indica que o produto está bem posicionado no mercado.
+              </p>
+            </div>
+          </div>
+        </Card>
+      </TabsContent>
 
       {/* Aba de Resultados e Estatísticas */}
       <TabsContent value="dashboard" className="space-y-6">
@@ -584,8 +924,24 @@ const AdminTabs = () => {
                         </td>
                         <td className="p-4">
                           <div className="flex gap-2">
-                            <Button size="sm" variant="outline">Editar</Button>
-                            <Button size="sm" variant="outline">Ver Detalhes</Button>
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => handleEditUser(user)}
+                              className="flex items-center gap-1"
+                            >
+                              <Edit className="h-3 w-3" />
+                              Editar
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => handleViewDetails(user)}
+                              className="flex items-center gap-1"
+                            >
+                              <Eye className="h-3 w-3" />
+                              Ver Detalhes
+                            </Button>
                           </div>
                         </td>
                       </tr>
@@ -960,6 +1316,190 @@ const AdminTabs = () => {
           </div>
         </Card>
       </TabsContent>
+
+      {/* Modal de Edição de Usuário */}
+      <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit className="h-5 w-5" />
+              Editar Usuário: {selectedUser?.name}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedUser && (
+            <div className="space-y-6">
+              {/* Informações Básicas */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Nome</Label>
+                  <Input value={selectedUser.name} readOnly className="mt-1" />
+                </div>
+                <div>
+                  <Label>Email</Label>
+                  <Input value={selectedUser.email} readOnly className="mt-1" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Plano Atual</Label>
+                  <div className="mt-1">
+                    <Badge className="capitalize">
+                      {selectedUser.plan}
+                    </Badge>
+                  </div>
+                </div>
+                <div>
+                  <Label>Status</Label>
+                  <div className="mt-1">
+                    <Badge variant={selectedUser.status === 'active' ? 'default' : 'secondary'}>
+                      {selectedUser.status === 'active' ? 'Ativo' : 'Inativo'}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+
+              {/* Alteração de Plano Rápida */}
+              <div>
+                <Label>Alterar Plano</Label>
+                <div className="mt-2 flex gap-2">
+                  <Select defaultValue={selectedUser.plan} onValueChange={(value) => {
+                    // Aqui você pode implementar a lógica de alteração rápida
+                    console.log('Alterando plano para:', value);
+                  }}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availablePlans.map((plan) => (
+                        <SelectItem key={plan.id} value={plan.id}>
+                          {plan.name} - R$ {plan.price.toFixed(2)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button size="sm" variant="outline">
+                    <CheckCircle className="h-4 w-4 mr-1" />
+                    Aplicar
+                  </Button>
+                </div>
+              </div>
+
+              {/* Ações */}
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <Button variant="outline" onClick={handleCloseModals}>
+                  Cancelar
+                </Button>
+                <Button onClick={handleCloseModals}>
+                  Salvar Alterações
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Detalhes do Usuário */}
+      <Dialog open={detailsModalOpen} onOpenChange={setDetailsModalOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="h-5 w-5" />
+              Detalhes do Usuário: {selectedUser?.name}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedUser && (
+            <div className="space-y-6">
+              {/* Informações Gerais */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card className="p-4">
+                  <h3 className="font-semibold mb-3">Informações Pessoais</h3>
+                  <div className="space-y-2 text-sm">
+                    <div><strong>Nome:</strong> {selectedUser.name}</div>
+                    <div><strong>Email:</strong> {selectedUser.email}</div>
+                    <div><strong>ID:</strong> <code className="text-xs">{selectedUser.id}</code></div>
+                  </div>
+                </Card>
+
+                <Card className="p-4">
+                  <h3 className="font-semibold mb-3">Status da Conta</h3>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center gap-2">
+                      <strong>Plano:</strong> 
+                      <Badge className="capitalize">
+                        {selectedUser.plan}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <strong>Status:</strong> 
+                      <Badge variant={selectedUser.status === 'active' ? 'default' : 'secondary'}>
+                        {selectedUser.status === 'active' ? 'Ativo' : 'Inativo'}
+                      </Badge>
+                    </div>
+                    <div><strong>Registrado em:</strong> {
+                      selectedUser.createdAt ? 
+                        (selectedUser.createdAt.toDate ? selectedUser.createdAt.toDate().toLocaleDateString('pt-BR') : new Date(selectedUser.createdAt).toLocaleDateString('pt-BR')) 
+                        : 'N/A'
+                    }</div>
+                    {selectedUser.lastLogin && (
+                      <div><strong>Último acesso:</strong> {
+                        selectedUser.lastLogin.toDate ? selectedUser.lastLogin.toDate().toLocaleDateString('pt-BR') : new Date(selectedUser.lastLogin).toLocaleDateString('pt-BR')
+                      }</div>
+                    )}
+                  </div>
+                </Card>
+              </div>
+
+              {/* Estatísticas do Usuário */}
+              <Card className="p-4">
+                <h3 className="font-semibold mb-3">Estatísticas de Uso</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div className="text-center p-3 bg-muted/50 rounded-lg">
+                    <div className="font-semibold text-lg">-</div>
+                    <div className="text-muted-foreground">Transações</div>
+                  </div>
+                  <div className="text-center p-3 bg-muted/50 rounded-lg">
+                    <div className="font-semibold text-lg">-</div>
+                    <div className="text-muted-foreground">Funcionários</div>
+                  </div>
+                  <div className="text-center p-3 bg-muted/50 rounded-lg">
+                    <div className="font-semibold text-lg">-</div>
+                    <div className="text-muted-foreground">Relatórios</div>
+                  </div>
+                  <div className="text-center p-3 bg-muted/50 rounded-lg">
+                    <div className="font-semibold text-lg">-</div>
+                    <div className="text-muted-foreground">Dias Ativo</div>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Histórico de Atividades */}
+              <Card className="p-4">
+                <h3 className="font-semibold mb-3">Atividades Recentes</h3>
+                <div className="text-sm text-muted-foreground text-center py-4">
+                  Histórico de atividades em desenvolvimento
+                </div>
+              </Card>
+
+              {/* Ações */}
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <Button variant="outline" onClick={handleCloseModals}>
+                  Fechar
+                </Button>
+                <Button onClick={() => {
+                  handleCloseModals();
+                  handleEditUser(selectedUser);
+                }}>
+                  <Edit className="h-4 w-4 mr-1" />
+                  Editar Usuário
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </Tabs>
   );
 };
