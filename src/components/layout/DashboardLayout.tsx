@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
 import { usePlanLimitations } from '@/hooks/usePlanLimitations';
 import { useMobile } from '@/hooks/useMobile';
+import { usePreload } from '@/hooks/usePreload';
 import { 
   LayoutDashboard, 
   Users, 
@@ -20,7 +21,7 @@ import {
   Crown,
   Menu,
   X
-} from 'lucide-react';
+} from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import {
@@ -44,6 +45,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const location = useLocation();
   const { user, isAdmin, logout } = useFirebaseAuth();
   const { canAccess, currentPlan } = usePlanLimitations();
+  const { preloadOnHover, preloadOnIdle } = usePreload();
   
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const isMobile = useMobile();
@@ -68,6 +70,11 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
       document.body.style.overflow = 'unset';
     };
   }, [isMobile, sidebarOpen]);
+
+  // Preload de rotas críticas quando o componente carrega
+  useEffect(() => {
+    preloadOnIdle();
+  }, [preloadOnIdle]);
 
   // Fechar sidebar quando navegar em mobile
   const handleNavigate = (path: string) => {
@@ -209,6 +216,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             <button
               key={item.path}
               onClick={() => handleNavigate(item.path)}
+              onMouseEnter={() => preloadOnHover(item.path)}
               className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all group ${
                 isActive(item.path)
                   ? 'bg-gradient-primary text-primary-foreground shadow-glow scale-105'
@@ -226,6 +234,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             <button
               key={item.path}
               onClick={() => handleNavigate(item.path)}
+              onMouseEnter={() => preloadOnHover(item.path)}
               className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all ${
                 isActive(item.path)
                   ? 'bg-gradient-primary text-primary-foreground shadow-glow'

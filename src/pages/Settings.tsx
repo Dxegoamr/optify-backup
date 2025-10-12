@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
+import { DataExport } from '@/components/settings/DataExport';
 
 const Settings = () => {
   const handleSave = () => {
@@ -21,10 +22,11 @@ const Settings = () => {
         </div>
 
         <Tabs defaultValue="general" className="space-y-6">
-          <TabsList className="grid w-full max-w-2xl grid-cols-3">
+          <TabsList className="grid w-full max-w-2xl grid-cols-4">
             <TabsTrigger value="general">Geral</TabsTrigger>
             <TabsTrigger value="notifications">Notificações</TabsTrigger>
             <TabsTrigger value="security">Segurança</TabsTrigger>
+            <TabsTrigger value="privacy">Privacidade</TabsTrigger>
           </TabsList>
 
           <TabsContent value="general" className="space-y-6">
@@ -173,6 +175,34 @@ const Settings = () => {
                     <p className="text-sm text-muted-foreground">Gerenciar dispositivos conectados</p>
                   </div>
                   <Button variant="outline" size="sm">Ver Sessões</Button>
+                </div>
+              </div>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="privacy" className="space-y-6">
+            {/* Exportação de Dados (LGPD) */}
+            <DataExport />
+
+            {/* Política de Privacidade */}
+            <Card className="p-6 shadow-card">
+              <h3 className="text-lg font-semibold mb-4">Política de Privacidade</h3>
+              <div className="space-y-4 text-sm text-muted-foreground">
+                <p>
+                  Seus dados são protegidos de acordo com a Lei Geral de Proteção de Dados (LGPD).
+                  Coletamos apenas as informações necessárias para o funcionamento do sistema.
+                </p>
+                <div className="flex gap-3">
+                  <Button variant="outline" size="sm" asChild>
+                    <a href="/privacidade" target="_blank">
+                      Ver Política Completa
+                    </a>
+                  </Button>
+                  <Button variant="outline" size="sm" asChild>
+                    <a href="/termos" target="_blank">
+                      Ver Termos de Uso
+                    </a>
+                  </Button>
                 </div>
               </div>
             </Card>

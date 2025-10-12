@@ -1,4 +1,4 @@
-import { collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, limit, doc, getDoc } from 'firebase/firestore';
 import { db } from '@/integrations/firebase/config';
 
 export interface PlanTransaction {
@@ -149,6 +149,70 @@ export const getPlanTransactions = async (): Promise<PlanTransaction[]> => {
  */
 export const getAdminStats = async (): Promise<AdminStats> => {
   try {
+    // Buscar estatísticas agregadas do servidor
+    const statsDoc = await getDoc(doc(db, 'admin_stats', 'global'));
+    
+    if (statsDoc.exists()) {
+      const serverStats = statsDoc.data();
+      
+      // Buscar dados adicionais necessários para o frontend
+      const users = await getAllUsers();
+      const transactions = await getPlanTransactions();
+
+      // Calcular distribuição de planos (ainda no cliente por ser específico do UI)
+      const planDistribution = users.reduce((acc, user) => {
+        acc[user.plan as keyof typeof acc] = (acc[user.plan as keyof typeof acc] || 0) + 1;
+        return acc;
+      }, { free: 0, standard: 0, medium: 0, ultimate: 0 });
+
+      // Calcular taxa de crescimento (usuários novos nos últimos 30 dias)
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const recentUsers = users.filter(user => 
+        user.createdAt && user.createdAt.toDate() > thirtyDaysAgo
+      ).length;
+      
+      const growthRate = serverStats.totalUsers > 0 ? (recentUsers / serverStats.totalUsers) * 100 : 0;
+
+      // Gerar atividade recente
+      const recentActivity = await generateRecentActivity(transactions, users);
+
+      // Formatar melhor dia
+      const bestDay = serverStats.bestDay ? {
+        date: new Date(serverStats.bestDay).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+        revenue: 0 // Será calculado abaixo se necessário
+      } : { date: 'N/A', revenue: 0 };
+
+      return {
+        totalUsers: serverStats.totalUsers || 0,
+        activeUsers: serverStats.activeUsers || 0,
+        totalRevenue: serverStats.totalRevenue || 0,
+        revenueToday: serverStats.revenueToday || 0,
+        revenueWeek: serverStats.revenueWeek || 0,
+        revenueMonth: serverStats.revenueMonth || 0,
+        bestDay,
+        growthRate,
+        planDistribution,
+        recentActivity
+      };
+    } else {
+      // Fallback: calcular no cliente se não houver agregações
+      console.warn('Estatísticas agregadas não encontradas, calculando no cliente');
+      return await calculateStatsLocally();
+    }
+  } catch (error) {
+    console.error('Erro ao buscar estatísticas:', error);
+    // Fallback para cálculo local em caso de erro
+    return await calculateStatsLocally();
+  }
+};
+
+/**
+ * Fallback: calcular estatísticas localmente (método antigo)
+ */
+const calculateStatsLocally = async (): Promise<AdminStats> => {
+  try {
     const users = await getAllUsers();
     const transactions = await getPlanTransactions();
 
@@ -243,7 +307,7 @@ export const getAdminStats = async (): Promise<AdminStats> => {
       recentActivity
     };
   } catch (error) {
-    console.error('Erro ao calcular estatísticas:', error);
+    console.error('Erro ao calcular estatísticas localmente:', error);
     throw error;
   }
 };

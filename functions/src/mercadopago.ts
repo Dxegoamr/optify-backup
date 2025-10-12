@@ -69,12 +69,19 @@ export const createPaymentPreference = functions.https.onRequest(async (req, res
   }
 
   try {
-    // Carregar variáveis de ambiente
-    const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN || "APP_USR-5496244105993399-070119-b9bec860fcf72e513a288bf609f3700c-454772336";
-    const BASE_URL_FRONTEND = process.env.BASE_URL_FRONTEND || "https://optify-definitivo.web.app/";
+    // Carregar variáveis de ambiente obrigatórias
+    const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+    const BASE_URL_FRONTEND = process.env.BASE_URL_FRONTEND;
     
     if (!MP_ACCESS_TOKEN || !BASE_URL_FRONTEND) {
-      res.status(500).json({ error: 'Configuração do servidor incompleta' });
+      console.error('Configuração do servidor incompleta:', {
+        hasToken: !!MP_ACCESS_TOKEN,
+        hasBaseUrl: !!BASE_URL_FRONTEND,
+      });
+      res.status(500).json({ 
+        error: 'Configuração do servidor incompleta',
+        message: 'MERCADO_PAGO_ACCESS_TOKEN e BASE_URL_FRONTEND são obrigatórios'
+      });
       return;
     }
 
@@ -158,8 +165,14 @@ export const createPaymentPreference = functions.https.onRequest(async (req, res
 // }
 
 export const mercadoPagoWebhook = functions.https.onRequest(async (req, res): Promise<void> => {
-  // Carregar variáveis de ambiente
-  const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN || "APP_USR-5496244105993399-070119-b9bec860fcf72e513a288bf609f3700c-454772336";
+  // Carregar variáveis de ambiente obrigatórias
+  const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+  
+  if (!MP_ACCESS_TOKEN) {
+    console.error('MERCADO_PAGO_ACCESS_TOKEN não configurado');
+    res.status(500).json({ error: 'Configuração do servidor incompleta' });
+    return;
+  }
 
   try {
     const { type, data, action } = req.body;
@@ -329,8 +342,14 @@ export const mercadoPagoWebhook = functions.https.onRequest(async (req, res): Pr
 
 // ---------- 3. checkPaymentStatus ----------
 export const checkPaymentStatus = functions.https.onRequest(async (req, res): Promise<void> => {
-  // Carregar variáveis de ambiente
-  const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN || "APP_USR-5496244105993399-070119-b9bec860fcf72e513a288bf609f3700c-454772336";
+  // Carregar variáveis de ambiente obrigatórias
+  const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+  
+  if (!MP_ACCESS_TOKEN) {
+    console.error('MERCADO_PAGO_ACCESS_TOKEN não configurado');
+    res.status(500).json({ error: 'Configuração do servidor incompleta' });
+    return;
+  }
 
   // Configurar CORS
   res.set('Access-Control-Allow-Origin', '*');

@@ -11,14 +11,18 @@ import { auth } from '@/integrations/firebase/config';
 import { UserPlatformService } from '@/core/services/user-specific.service';
 import { checkUserIsAdmin } from '@/core/services/admin.service';
 import { UserProfileService } from '@/core/services/user-profile.service';
+import { getIdTokenResult } from 'firebase/auth';
+import { setSentryUser } from '@/observability/sentry';
 
 interface FirebaseAuthContextType {
   user: User | null;
   loading: boolean;
   isAdmin: boolean;
+  customClaims: Record<string, any> | null;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
+  refreshClaims: () => Promise<void>;
 }
 
 const FirebaseAuthContext = createContext<FirebaseAuthContextType | undefined>(undefined);
@@ -35,12 +39,38 @@ export const FirebaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [customClaims, setCustomClaims] = useState<Record<string, any> | null>(null);
+
+  // Função para obter custom claims do usuário
+  const getCustomClaims = async (user: User) => {
+    try {
+      const tokenResult = await getIdTokenResult(user, true); // force refresh
+      const claims = tokenResult.claims || {};
+      setCustomClaims(claims);
+      setIsAdmin(claims.admin === true || user.email === 'diegkamor@gmail.com');
+      return claims;
+    } catch (error) {
+      console.error('Erro ao obter custom claims:', error);
+      setCustomClaims(null);
+      setIsAdmin(user.email === 'diegkamor@gmail.com'); // fallback para superadmin
+      return null;
+    }
+  };
+
+  // Função para refresh dos claims
+  const refreshClaims = async () => {
+    if (user) {
+      await getCustomClaims(user);
+    }
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
       
-      // Verificar se o usuário é admin e criar/atualizar perfil se necessário
+      // Configurar usuário no Sentry
+      setSentryUser(user);
+      
       if (user) {
         try {
           // Verificar se o usuário tem documento no Firestore
@@ -57,26 +87,19 @@ export const FirebaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
             console.log(`✅ Perfil criado para usuário existente: ${user.email}`);
           }
           
-          const adminStatus = await checkUserIsAdmin(user.uid, user.email);
+          // Obter custom claims para verificar status de admin
+          await getCustomClaims(user);
           
-          // FORÇAR ADMIN PARA diegkamor@gmail.com TEMPORARIAMENTE
-          if (user.email === 'diegkamor@gmail.com') {
-            setIsAdmin(true);
-          } else {
-            setIsAdmin(adminStatus);
-          }
         } catch (error) {
           console.error('Erro ao verificar/criar perfil do usuário:', error);
           
-          // FORÇAR ADMIN PARA diegkamor@gmail.com MESMO EM CASO DE ERRO
-          if (user.email === 'diegkamor@gmail.com') {
-            setIsAdmin(true);
-          } else {
-            setIsAdmin(false);
-          }
+          // Fallback para superadmin em caso de erro
+          setCustomClaims(null);
+          setIsAdmin(user.email === 'diegkamor@gmail.com');
         }
       } else {
         setIsAdmin(false);
+        setCustomClaims(null);
       }
       
       setLoading(false);
@@ -129,9 +152,11 @@ export const FirebaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     user,
     loading,
     isAdmin,
+    customClaims,
     signIn,
     signUp,
-    logout
+    logout,
+    refreshClaims
   };
 
   return (
