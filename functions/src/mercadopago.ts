@@ -100,6 +100,12 @@ export const createPaymentPreference = functions.https.onRequest(async (req, res
         currency_id: 'BRL',
         unit_price: amount,
       }],
+      back_urls: {
+        success: `${BASE_URL_FRONTEND}/payment/success`,
+        failure: `${BASE_URL_FRONTEND}/payment/failure`,
+        pending: `${BASE_URL_FRONTEND}/payment/pending`,
+      },
+      auto_return: 'approved',
       external_reference,
       metadata: { userId, userEmail, planId, billingType },
     };
@@ -150,29 +156,48 @@ function verifySignature(rawBody: string, headers: any, webhookSecret: string) {
 
 export const mercadoPagoWebhook = functions.https.onRequest(async (req, res): Promise<void> => {
   // Carregar variáveis de ambiente
-  const MP_ACCESS_TOKEN = functions.config().mercadopago.access_token;
-  const MP_WEBHOOK_SECRET = functions.config().mercadopago.webhook_secret;
+  const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN || "APP_USR-5496244105993399-070119-b9bec860fcf72e513a288bf609f3700c-454772336";
+  const MP_WEBHOOK_SECRET = process.env.MERCADO_PAGO_WEBHOOK_SECRET || "d2f65399c863658bfaf6adb73621b346c4f644bef36905f136e1f46a9b44c33c";
 
+  console.log('DEBUG: Webhook recebido:', req.body);
+  
   const rawBody = (req as any).rawBody?.toString() || JSON.stringify(req.body);
   if (!verifySignature(rawBody, req.headers, MP_WEBHOOK_SECRET)) {
+    console.log('DEBUG: Assinatura inválida');
     res.status(401).send('Invalid signature');
     return;
   }
   try {
     const { type, data } = req.body;
+    console.log('DEBUG: Tipo:', type, 'Data:', data);
+    
     if (type !== 'payment' || !data?.id) {
+      console.log('DEBUG: Ignorando - não é payment ou sem ID');
       res.status(200).send('ignored');
       return;
     }
 
+    console.log('DEBUG: Buscando dados do pagamento:', data.id);
     const payResp = await fetch(`${MP_API}/v1/payments/${data.id}`, {
       headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` },
     });
     const payment = await payResp.json();
+    console.log('DEBUG: Dados do pagamento:', payment);
 
     const ext = payment.external_reference;
+    console.log('DEBUG: External reference:', ext);
+    
+    if (!ext) {
+      console.log('DEBUG: Sem external reference');
+      res.status(200).send('no external reference');
+      return;
+    }
+    
     const [userId, planId, billingType] = ext.split('__');
+    console.log('DEBUG: Dados extraídos:', { userId, planId, billingType });
+    
     const txSnap = await db.collection('transactions_plans').where('externalReference', '==', ext).limit(1).get();
+    console.log('DEBUG: Transações encontradas:', txSnap.size);
 
     if (!txSnap.empty) {
       const ref = txSnap.docs[0].ref;
@@ -181,11 +206,16 @@ export const mercadoPagoWebhook = functions.https.onRequest(async (req, res): Pr
         paymentMethod: payment.payment_type_id,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
+      console.log('DEBUG: Transação atualizada');
     }
 
     if (payment.status === 'approved') {
+      console.log('DEBUG: Pagamento aprovado, atualizando plano do usuário');
       const months = billingType === 'annual' ? 12 : 1;
       await updateUserPlan(userId, planId as PlanId, months);
+      console.log('DEBUG: Plano atualizado com sucesso');
+    } else {
+      console.log('DEBUG: Pagamento não aprovado, status:', payment.status);
     }
 
     res.status(200).send('ok');
