@@ -18,6 +18,21 @@ const Planos = () => {
   const [isAnnual, setIsAnnual] = useState(false);
   const createPreferenceMutation = useCreatePreference();
 
+  // Hierarquia dos planos (maior número = plano superior)
+  const planHierarchy = {
+    free: 0,
+    standard: 1,
+    medium: 2,
+    ultimate: 3
+  };
+
+  // Função para verificar se um plano é menor que o atual
+  const isPlanLower = (planValue: string) => {
+    const currentLevel = planHierarchy[currentPlan as keyof typeof planHierarchy] || 0;
+    const planLevel = planHierarchy[planValue as keyof typeof planHierarchy] || 0;
+    return planLevel < currentLevel;
+  };
+
   const planFeatures = {
     free: [
       { text: 'Dashboard básico', icon: Check },
@@ -130,7 +145,7 @@ const Planos = () => {
       period: 'Grátis',
       annualPrice: 0,
       features: planFeatures.free,
-      current: false, // TODO: Buscar plano atual do usuário
+      current: currentPlan === 'free',
       popular: false,
       description: 'Testar o sistema'
     },
@@ -141,7 +156,7 @@ const Planos = () => {
       period: 'mês',
       annualPrice: 10.20,
       features: planFeatures.standard,
-      current: false,
+      current: currentPlan === 'standard',
       popular: false,
       description: 'Pequenos negócios'
     },
@@ -152,7 +167,7 @@ const Planos = () => {
       period: 'mês',
       annualPrice: 509.16,
       features: planFeatures.medium,
-      current: false,
+      current: currentPlan === 'medium',
       popular: true,
       description: 'Médias empresas'
     },
@@ -163,7 +178,7 @@ const Planos = () => {
       period: 'mês',
       annualPrice: 1018.32,
       features: planFeatures.ultimate,
-      current: false,
+      current: currentPlan === 'ultimate',
       popular: false,
       description: 'Grandes empresas'
     }
@@ -195,6 +210,7 @@ const Planos = () => {
               className={`
                 p-6 relative shadow-card card-hover
                 ${plan.popular ? 'border-primary border-2' : ''}
+                ${isPlanLower(plan.value) ? 'opacity-60' : ''}
               `}
             >
               {plan.popular && (
@@ -248,8 +264,8 @@ const Planos = () => {
                 <Button
                   className="w-full"
                   variant={plan.current ? 'outline' : 'default'}
-                  disabled={plan.current || createPreferenceMutation.isPending}
-                  onClick={() => !plan.current && handleAssinar(plan.value)}
+                  disabled={plan.current || createPreferenceMutation.isPending || isPlanLower(plan.value)}
+                  onClick={() => !plan.current && !isPlanLower(plan.value) && handleAssinar(plan.value)}
                 >
                   {createPreferenceMutation.isPending ? (
                     <>
@@ -258,6 +274,8 @@ const Planos = () => {
                     </>
                   ) : plan.current ? (
                     'Plano Atual'
+                  ) : isPlanLower(plan.value) ? (
+                    'Plano Menor'
                   ) : (
                     'Assinar'
                   )}

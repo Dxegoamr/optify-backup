@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, XCircle, Clock, ArrowLeft, RefreshCw } from "lucide-react";
+import { CheckCircle, XCircle, Clock, ArrowLeft, RefreshCw, Sparkles } from "lucide-react";
 import { useFirebaseAuth } from "@/contexts/FirebaseAuthContext";
 import { UserProfileService } from "@/core/services/user-profile.service";
 
@@ -15,6 +15,8 @@ export default function PaymentResult({ mode }: { mode: "success" | "failure" | 
   const [currentMode, setCurrentMode] = useState(mode);
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [userInfo, setUserInfo] = useState<any>(null);
+  const [showAnimation, setShowAnimation] = useState(false);
+  const [showContent, setShowContent] = useState(false);
   
   // Hook para obter informações do usuário autenticado
   const { user } = useFirebaseAuth();
@@ -65,6 +67,18 @@ export default function PaymentResult({ mode }: { mode: "success" | "failure" | 
       setCurrentMode('success');
     }
   }, [userInfo?.plano, currentMode]);
+
+  // Animação quando muda para success
+  useEffect(() => {
+    if (currentMode === 'success' && mode !== 'success') {
+      setShowAnimation(true);
+      setTimeout(() => {
+        setShowContent(true);
+      }, 1500); // Mostrar conteúdo após 1.5s de animação
+    } else if (currentMode === 'success') {
+      setShowContent(true);
+    }
+  }, [currentMode, mode]);
 
   useEffect(() => {
     if (!paymentId) {
@@ -149,13 +163,33 @@ export default function PaymentResult({ mode }: { mode: "success" | "failure" | 
 
   return (
     <DashboardLayout>
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <Card className={`w-full max-w-2xl p-8 ${config.cardBg} border shadow-lg`}>
+      <div className="min-h-screen flex items-center justify-center p-4 relative">
+        {/* Animação de confetes para success */}
+        {showAnimation && currentMode === 'success' && (
+          <div className="fixed inset-0 pointer-events-none z-50">
+            {[...Array(50)].map((_, i) => (
+              <div
+                key={i}
+                className="absolute animate-bounce"
+                style={{
+                  left: `${Math.random() * 100}%`,
+                  top: `${Math.random() * 100}%`,
+                  animationDelay: `${Math.random() * 2}s`,
+                  animationDuration: `${2 + Math.random() * 2}s`,
+                }}
+              >
+                <Sparkles className="h-4 w-4 text-emerald-500" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        <Card className={`w-full max-w-2xl p-8 ${config.cardBg} border shadow-lg transition-all duration-1000 ${showContent ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
           <div className="space-y-8">
-            {/* Ícone */}
+            {/* Ícone com animação */}
             <div className="flex justify-center">
-              <div className={`p-4 rounded-full ${config.iconBg}`}>
-                <IconComponent className={`h-12 w-12 ${config.iconColor}`} />
+              <div className={`p-4 rounded-full ${config.iconBg} transition-all duration-1000 ${showContent ? 'scale-100' : 'scale-0'}`}>
+                <IconComponent className={`h-12 w-12 ${config.iconColor} ${currentMode === 'success' ? 'animate-pulse' : ''}`} />
               </div>
             </div>
 
