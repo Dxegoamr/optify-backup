@@ -30,6 +30,7 @@ import EmployeeProfile from "./pages/EmployeeProfile";
 import Termos from "./pages/Termos";
 import Privacidade from "./pages/Privacidade";
 import Suporte from "./pages/Suporte";
+import PaymentResult from "./pages/payment/PaymentResult";
 
 const queryClient = new QueryClient();
 
@@ -64,6 +65,11 @@ const App = () => (
             <Route path="/termos" element={<Termos />} />
             <Route path="/privacidade" element={<Privacidade />} />
             <Route path="/suporte" element={<Suporte />} />
+            
+            {/* Rotas de pagamento */}
+            <Route path="/payment/success" element={<ProtectedRoute><PaymentResult mode="success" /></ProtectedRoute>} />
+            <Route path="/payment/failure" element={<ProtectedRoute><PaymentResult mode="failure" /></ProtectedRoute>} />
+            <Route path="/payment/pending" element={<ProtectedRoute><PaymentResult mode="pending" /></ProtectedRoute>} />
             
             <Route path="*" element={<NotFound />} />
           </Routes>

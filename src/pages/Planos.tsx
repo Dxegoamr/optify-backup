@@ -4,13 +4,19 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Check, Crown, Users, TrendingUp, Shield, Bot, Zap } from 'lucide-react';
+import { Check, Crown, Users, TrendingUp, Shield, Bot, Zap, Loader2 } from 'lucide-react';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
 import { getAllPlanInfo } from '@/core/services/plan-limitations.service';
+import { useCreatePreference } from '@/hooks/useCreatePreference';
+import { usePlanLimitations } from '@/hooks/usePlanLimitations';
+import { toast } from 'sonner';
+import { env } from '@/config/env';
 
 const Planos = () => {
   const { user } = useFirebaseAuth();
+  const { currentPlan } = usePlanLimitations();
   const [isAnnual, setIsAnnual] = useState(false);
+  const createPreferenceMutation = useCreatePreference();
 
   const planFeatures = {
     free: [
@@ -71,6 +77,49 @@ const Planos = () => {
       { text: 'Suporte prioritário', icon: Check, exclusive: true },
       { text: 'Suporte dedicado', icon: Check, exclusive: true }
     ]
+  };
+
+  const handleAssinar = async (planId: string) => {
+    if (!user) {
+      toast.error('Você precisa estar logado para assinar um plano');
+      return;
+    }
+
+    if (planId === 'free') {
+      toast.error('O plano Free já está ativo');
+      return;
+    }
+
+    try {
+      console.log('🔍 Debug - Variáveis de ambiente:', {
+        API_URL: env.API_URL,
+        PUBLIC_KEY: env.MERCADO_PAGO_PUBLIC_KEY
+      });
+
+      console.log('🔍 Debug - Dados do payload:', {
+        userId: user.uid,
+        userEmail: user.email || '',
+        userName: user.displayName || user.email?.split('@')[0] || 'Usuário',
+        planId: planId,
+        billingType: isAnnual ? 'annual' : 'monthly'
+      });
+
+      const preference = await createPreferenceMutation.mutateAsync({
+        userId: user.uid,
+        userEmail: user.email || '',
+        userName: user.displayName || user.email?.split('@')[0] || 'Usuário',
+        planId: planId as 'standard' | 'medium' | 'ultimate',
+        billingType: isAnnual ? 'annual' : 'monthly'
+      });
+
+      console.log('✅ Preferência criada:', preference);
+
+      // Redirecionar para o Mercado Pago
+      window.location.href = preference.init_point;
+    } catch (error) {
+      console.error('❌ Erro ao criar preferência:', error);
+      toast.error('Erro ao processar pagamento. Tente novamente.');
+    }
   };
 
   const plans = [
@@ -199,9 +248,19 @@ const Planos = () => {
                 <Button
                   className="w-full"
                   variant={plan.current ? 'outline' : 'default'}
-                  disabled={plan.current}
+                  disabled={plan.current || createPreferenceMutation.isPending}
+                  onClick={() => !plan.current && handleAssinar(plan.value)}
                 >
-                  {plan.current ? 'Plano Atual' : 'Assinar'}
+                  {createPreferenceMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Redirecionando...
+                    </>
+                  ) : plan.current ? (
+                    'Plano Atual'
+                  ) : (
+                    'Assinar'
+                  )}
                 </Button>
               </div>
             </Card>

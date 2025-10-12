@@ -52,19 +52,15 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     { icon: Calendar, label: 'Histórico', path: '/historico', requiredFeature: 'history' },
     { icon: Crown, label: 'Planos', path: '/planos', requiredFeature: 'dashboard' },
     { icon: Gift, label: 'Afiliados', path: '/afiliados', requiredFeature: 'dashboard' },
-    // FORÇAR ADMIN PARA diegkamor@gmail.com TEMPORARIAMENTE
-    ...((isAdmin || user?.email === 'diegkamor@gmail.com') ? [{ icon: Shield, label: 'Admin', path: '/admin', requiredFeature: 'advancedPanel' }] : []),
   ].filter(item => {
-    // Para admins hardcoded, sempre permitir acesso ao admin
-    if (item.path === '/admin' && (isAdmin || user?.email === 'diegkamor@gmail.com')) {
-      return true;
-    }
     return canAccess(item.requiredFeature as any);
   });
 
   const bottomNavItems = [
     { icon: UserCircle, label: 'Perfil', path: '/perfil' },
     { icon: Settings, label: 'Configurações', path: '/settings' },
+    // FORÇAR ADMIN PARA diegkamor@gmail.com TEMPORARIAMENTE
+    ...((isAdmin || user?.email === 'diegkamor@gmail.com') ? [{ icon: Shield, label: 'Admin', path: '/admin', requiredFeature: 'advancedPanel' }] : []),
   ];
 
   const isActive = (path: string) => location.pathname === path;
@@ -121,18 +117,18 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           ))}
         </nav>
 
-        <div className="p-4 border-t border-sidebar-border/50 space-y-2">
+        <div className="p-3 border-t border-sidebar-border/50 space-y-1">
           {bottomNavItems.map((item) => (
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
-              className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all ${
                 isActive(item.path)
                   ? 'bg-gradient-primary text-primary-foreground shadow-glow'
                   : 'hover:bg-sidebar-accent text-muted-foreground hover:text-foreground'
               }`}
             >
-              <item.icon className="h-5 w-5" />
+              <item.icon className="h-4 w-4" />
               <span className="text-sm font-semibold">{item.label}</span>
             </button>
           ))}
@@ -141,9 +137,9 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             <AlertDialogTrigger asChild>
               <Button
                 variant="ghost"
-                className="w-full justify-start gap-4 px-5 text-destructive hover:text-destructive hover:bg-destructive/10 rounded-2xl"
+                className="w-full justify-start gap-3 px-4 py-2.5 text-destructive hover:text-destructive hover:bg-destructive/10 rounded-xl"
               >
-                <LogOut className="h-5 w-5" />
+                <LogOut className="h-4 w-4" />
                 <span className="text-sm font-semibold">Sair</span>
               </Button>
             </AlertDialogTrigger>
