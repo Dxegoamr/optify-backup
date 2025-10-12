@@ -472,3 +472,50 @@ All colors MUST be HSL.
     @apply max-w-screen-sm sm:max-w-screen-md md:max-w-screen-lg lg:max-w-screen-xl xl:max-w-screen-2xl;
   }
 }
+
+/* Dashboard specific responsive improvements */
+.dashboard-grid {
+  @apply grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 lg:gap-6;
+}
+
+@media (min-width: 1280px) {
+  .dashboard-grid {
+    @apply grid-cols-4;
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .dashboard-grid {
+    @apply grid-cols-2 gap-6;
+  }
+}
+
+/* Card alignment improvements for better consistency */
+.stat-card {
+  @apply flex flex-col h-full;
+}
+
+.stat-card-content {
+  @apply flex items-center justify-between flex-1;
+}
+
+.stat-card-text {
+  @apply flex-1 space-y-3;
+}
+
+.stat-card-icon {
+  @apply flex-shrink-0 ml-4;
+}
+
+/* Ensure consistent card heights across different screen sizes */
+@media (min-width: 768px) and (max-width: 1279px) {
+  .stat-card {
+    @apply min-h-[140px];
+  }
+}
+
+@media (min-width: 1280px) {
+  .stat-card {
+    @apply min-h-[160px];
+  }
+}

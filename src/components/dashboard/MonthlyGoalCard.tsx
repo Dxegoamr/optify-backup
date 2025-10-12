@@ -128,16 +128,16 @@ const MonthlyGoalCard = () => {
   });
 
   return (
-    <Card className="p-6 shadow-card">
-      <div className="flex items-start justify-between mb-4">
-        <div>
+    <Card className="p-4 lg:p-6 shadow-card">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex-1">
           <p className="text-sm text-muted-foreground mb-1">Meta Mensal</p>
-          <p className="text-3xl font-bold">R$ {monthlyGoal.toLocaleString('pt-BR')}</p>
+          <p className="text-2xl lg:text-3xl font-bold leading-tight">R$ {monthlyGoal.toLocaleString('pt-BR')}</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <button className="p-3 bg-gradient-primary rounded-xl shadow-glow hover:shadow-glow-lg transition-all duration-300 cursor-pointer">
-              <Target className="h-6 w-6 text-primary-foreground" />
+            <button className="p-3 lg:p-4 bg-gradient-primary rounded-xl shadow-glow hover:shadow-glow-lg transition-all duration-300 cursor-pointer flex-shrink-0 ml-4">
+              <Target className="h-5 w-5 lg:h-6 lg:w-6 text-primary-foreground" />
             </button>
           </DialogTrigger>
           <DialogContent>
