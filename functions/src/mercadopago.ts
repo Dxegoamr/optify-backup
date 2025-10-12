@@ -108,6 +108,12 @@ export const createPaymentPreference = functions.https.onRequest(async (req, res
       auto_return: 'approved',
       external_reference,
       metadata: { userId, userEmail, planId, billingType },
+      payment_methods: {
+        excluded_payment_types: [],
+        excluded_payment_methods: [],
+        installments: 12
+      },
+      notification_url: `${BASE_URL_FRONTEND.replace('web.app', 'web.app')}/api/webhook/mercadopago`,
     };
 
     const resp = await fetch(`${MP_API}/checkout/preferences`, {
