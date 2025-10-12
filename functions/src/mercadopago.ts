@@ -239,7 +239,7 @@ export const mercadoPagoWebhook = functions.https.onRequest(async (req, res): Pr
         if (!txSnap.empty) {
           const ref = txSnap.docs[0].ref;
           await ref.set({
-            status: status,
+            status: status === 'approved' ? 'completed' : status,
             paymentMethod: paymentData.payment_type_id,
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });

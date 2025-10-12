@@ -58,11 +58,42 @@ export const getAllUsers = async (): Promise<AdminUser[]> => {
       const userData = userDoc.data();
       const userId = userDoc.id;
 
+      // Buscar nome completo do perfil do usuário
+      let fullName = 'Nome não informado';
+      
+      try {
+        // Tentar buscar no perfil básico do usuário
+        const profileDoc = await getDocs(
+          query(
+            collection(db, 'users', userId, 'profile'),
+            limit(1)
+          )
+        );
+        
+        if (!profileDoc.empty) {
+          const profileData = profileDoc.docs[0].data();
+          fullName = profileData.name || profileData.fullName || fullName;
+        }
+      } catch (profileError) {
+        console.log('Erro ao buscar perfil, usando dados do documento principal');
+      }
+      
+      // Fallback para dados do documento principal
+      if (fullName === 'Nome não informado') {
+        if (userData.name) {
+          fullName = userData.name;
+        } else if (userData.displayName) {
+          fullName = userData.displayName;
+        } else if (userData.fullName) {
+          fullName = userData.fullName;
+        }
+      }
+
       // Todos os dados agora estão direto no documento users/{userId}
       users.push({
         id: userId,
         email: userData.email || userDoc.id,
-        name: userData.name || userData.displayName || 'Nome não informado',
+        name: fullName,
         plan: userData.plano || 'free',
         status: userData.isActive ? 'active' : 'inactive',
         createdAt: userData.createdAt,
