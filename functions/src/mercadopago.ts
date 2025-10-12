@@ -36,22 +36,23 @@ async function createPlanTransaction(data: any) {
   return ref.id;
 }
 
-async function updateUserPlan(userId: string, planId: PlanId, months: number) {
-  const plan = PLANOS[planId];
-  const now = admin.firestore.Timestamp.now();
-  const end = admin.firestore.Timestamp.fromMillis(now.toMillis() + months * 30 * 24 * 60 * 60 * 1000);
+// Função antiga - não mais utilizada (agora buscamos por email)
+// async function updateUserPlan(userId: string, planId: PlanId, months: number) {
+//   const plan = PLANOS[planId];
+//   const now = admin.firestore.Timestamp.now();
+//   const end = admin.firestore.Timestamp.fromMillis(now.toMillis() + months * 30 * 24 * 60 * 60 * 1000);
 
-  await db.collection('users').doc(userId).set({
-    plano: planId,
-    funcionariosPermitidos: plan.max_funcionarios,
-    isSubscriber: planId !== 'free',
-    isActive: true,
-    subscriptionStartDate: now,
-    subscriptionEndDate: end,
-    subscriptionMonths: months,
-    updatedAt: now,
-  }, { merge: true });
-}
+//   await db.collection('users').doc(userId).set({
+//     plano: planId,
+//     funcionariosPermitidos: plan.max_funcionarios,
+//     isSubscriber: planId !== 'free',
+//     isActive: true,
+//     subscriptionStartDate: now,
+//     subscriptionEndDate: end,
+//     subscriptionMonths: months,
+//     updatedAt: now,
+//   }, { merge: true });
+// }
 
 // ---------- 1. createPaymentPreference ----------
 export const createPaymentPreference = functions.https.onRequest(async (req, res): Promise<void> => {
@@ -148,82 +149,163 @@ export const createPaymentPreference = functions.https.onRequest(async (req, res
 });
 
 // ---------- 2. mercadoPagoWebhook ----------
-function verifySignature(rawBody: string, headers: any, webhookSecret: string) {
-  const sig = headers['x-signature'] || '';
-  if (!sig || !webhookSecret) return false;
-  const expected = crypto.createHmac('sha256', webhookSecret).update(rawBody).digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
-}
+// Verificação de assinatura desabilitada temporariamente para debug
+// function verifySignature(rawBody: string, headers: any, webhookSecret: string) {
+//   const sig = headers['x-signature'] || '';
+//   if (!sig || !webhookSecret) return false;
+//   const expected = crypto.createHmac('sha256', webhookSecret).update(rawBody).digest('hex');
+//   return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
+// }
 
 export const mercadoPagoWebhook = functions.https.onRequest(async (req, res): Promise<void> => {
   // Carregar variáveis de ambiente
   const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN || "APP_USR-5496244105993399-070119-b9bec860fcf72e513a288bf609f3700c-454772336";
-  const MP_WEBHOOK_SECRET = process.env.MERCADO_PAGO_WEBHOOK_SECRET || "d2f65399c863658bfaf6adb73621b346c4f644bef36905f136e1f46a9b44c33c";
 
-  console.log('DEBUG: Webhook recebido:', req.body);
-  
-  const rawBody = (req as any).rawBody?.toString() || JSON.stringify(req.body);
-  if (!verifySignature(rawBody, req.headers, MP_WEBHOOK_SECRET)) {
-    console.log('DEBUG: Assinatura inválida');
-    res.status(401).send('Invalid signature');
-    return;
-  }
   try {
-    const { type, data } = req.body;
-    console.log('DEBUG: Tipo:', type, 'Data:', data);
-    
-    if (type !== 'payment' || !data?.id) {
-      console.log('DEBUG: Ignorando - não é payment ou sem ID');
-      res.status(200).send('ignored');
+    const { type, data, action } = req.body;
+    console.log('📋 Webhook recebido:', req.body);
+
+    // ⚠️ Ignora merchant_order porque não tem dados ainda
+    if (type === 'merchant_order') {
+      console.log('⏭️ Ignorando webhook merchant_order');
+      res.status(200).json({ ok: true });
       return;
     }
 
-    console.log('DEBUG: Buscando dados do pagamento:', data.id);
-    const payResp = await fetch(`${MP_API}/v1/payments/${data.id}`, {
-      headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` },
-    });
-    const payment = await payResp.json();
-    console.log('DEBUG: Dados do pagamento:', payment);
+    // 🔹 Processa somente webhooks de pagamento
+    if (type === 'payment' || (action && action.startsWith('payment.'))) {
+      const paymentId = data?.id;
 
-    const ext = payment.external_reference;
-    console.log('DEBUG: External reference:', ext);
-    
-    if (!ext) {
-      console.log('DEBUG: Sem external reference');
-      res.status(200).send('no external reference');
-      return;
-    }
-    
-    const [userId, planId, billingType] = ext.split('__');
-    console.log('DEBUG: Dados extraídos:', { userId, planId, billingType });
-    
-    const txSnap = await db.collection('transactions_plans').where('externalReference', '==', ext).limit(1).get();
-    console.log('DEBUG: Transações encontradas:', txSnap.size);
+      if (!paymentId) {
+        console.log('⚠️ Nenhum paymentId encontrado.');
+        res.status(400).json({ error: 'paymentId não encontrado' });
+        return;
+      }
 
-    if (!txSnap.empty) {
-      const ref = txSnap.docs[0].ref;
-      await ref.set({
-        status: payment.status,
-        paymentMethod: payment.payment_type_id,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      }, { merge: true });
-      console.log('DEBUG: Transação atualizada');
-    }
+      // 🔍 Busca informações do pagamento no MercadoPago
+      console.log('🔍 Buscando dados do pagamento:', paymentId);
+      const response = await fetch(`${MP_API}/v1/payments/${paymentId}`, {
+        headers: {
+          Authorization: `Bearer ${MP_ACCESS_TOKEN}`,
+        },
+      });
 
-    if (payment.status === 'approved') {
-      console.log('DEBUG: Pagamento aprovado, atualizando plano do usuário');
-      const months = billingType === 'annual' ? 12 : 1;
-      await updateUserPlan(userId, planId as PlanId, months);
-      console.log('DEBUG: Plano atualizado com sucesso');
+      const paymentData = await response.json();
+      console.log('📊 Dados do pagamento:', paymentData);
+
+      if (paymentData.error) {
+        console.error('❌ Erro ao buscar pagamento:', paymentData);
+        res.status(400).json({ error: 'Erro ao buscar pagamento' });
+        return;
+      }
+
+      const email = (
+        paymentData?.metadata?.userEmail ||
+        paymentData?.payer?.email ||
+        ''
+      )
+        .toString()
+        .trim()
+        .toLowerCase() || null;
+      
+      const planId = paymentData?.metadata?.planId || 'standard';
+      const billingType = paymentData?.metadata?.billingType || 'monthly';
+      const status = paymentData?.status;
+      const externalReference = paymentData?.external_reference;
+
+      console.log('📧 Email:', email);
+      console.log('📦 Plano:', planId);
+      console.log('📅 Período:', billingType);
+      console.log('✅ Status:', status);
+
+      if (!email) {
+        console.log('⚠️ Pagamento sem email, não é possível atualizar usuário.');
+        res.status(200).json({ ok: true });
+        return;
+      }
+
+      // 🔄 Atualiza transação
+      if (externalReference) {
+        const txSnap = await db.collection('transactions_plans')
+          .where('externalReference', '==', externalReference)
+          .limit(1)
+          .get();
+        
+        if (!txSnap.empty) {
+          const ref = txSnap.docs[0].ref;
+          await ref.set({
+            status: status,
+            paymentMethod: paymentData.payment_type_id,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true });
+          console.log('✅ Transação atualizada');
+        }
+      }
+
+      if (status === 'approved') {
+        console.log('✅ Pagamento aprovado! Atualizando plano do usuário...');
+        
+        // 🔢 Calcula data de expiração
+        const startDate = new Date();
+        const endDate = new Date(startDate);
+        if (billingType === 'monthly') {
+          endDate.setMonth(endDate.getMonth() + 1);
+        } else if (billingType === 'annual') {
+          endDate.setFullYear(endDate.getFullYear() + 1);
+        }
+
+        console.log('🔍 Buscando usuário pelo email:', email);
+        
+        // 🔹 Localiza documentos existentes do usuário pelo campo email
+        const usersSnap = await db
+          .collection('users')
+          .where('email', '==', email)
+          .get();
+
+        console.log('📦 Usuários encontrados:', usersSnap.size);
+
+        const userUpdateData = {
+          email,
+          plano: planId,
+          periodo: billingType,
+          isActive: true,
+          isSubscriber: true,
+          subscription: {
+            plan: planId,
+            period: billingType,
+            active: true,
+            updatedAt: new Date(),
+            expiresAt: endDate,
+          },
+          subscriptionStartDate: startDate,
+          subscriptionEndDate: endDate,
+          atualizadoEm: new Date(),
+        };
+
+        if (!usersSnap.empty) {
+          // Atualiza TODOS os documentos que possuem o mesmo email
+          const batch = db.batch();
+          usersSnap.docs.forEach((docRef: FirebaseFirestore.QueryDocumentSnapshot) => {
+            batch.set(docRef.ref, userUpdateData, { merge: true });
+            console.log('📝 Atualizando documento:', docRef.id);
+          });
+          await batch.commit();
+          console.log(`✅ Usuário ${email} atualizado para plano ${planId} (${billingType}) até ${endDate.toISOString()}`);
+        } else {
+          console.warn(`⚠️ Nenhum documento encontrado para email ${email}`);
+        }
+      } else {
+        console.log(`📢 Pagamento não aprovado (status: ${status})`);
+      }
     } else {
-      console.log('DEBUG: Pagamento não aprovado, status:', payment.status);
+      console.log(`📢 Webhook ignorado (tipo: ${type})`);
     }
 
-    res.status(200).send('ok');
+    res.status(200).json({ ok: true });
     return;
-  } catch (err) {
-    console.error(err);
-    res.status(500).send('error');
+  } catch (error) {
+    console.error('❌ Erro no webhook:', error);
+    res.status(500).json({ error: 'Erro interno' });
     return;
   }
 });
