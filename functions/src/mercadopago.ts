@@ -108,6 +108,7 @@ export const createPaymentPreference = functions.https.onRequest(async (req, res
       auto_return: 'approved',
       external_reference,
       metadata: { userId, userEmail, planId, billingType },
+      notification_url: 'https://us-central1-optify-definitivo.cloudfunctions.net/mercadoPagoWebhook',
     };
 
     const resp = await fetch(`${MP_API}/checkout/preferences`, {
