@@ -230,7 +230,7 @@ export const mercadoPagoWebhook = functions.https.onRequest(async (req, res): Pr
 // ---------- 3. checkPaymentStatus ----------
 export const checkPaymentStatus = functions.https.onRequest(async (req, res): Promise<void> => {
   // Carregar variáveis de ambiente
-  const MP_ACCESS_TOKEN = functions.config().mercadopago.access_token;
+  const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN || "APP_USR-5496244105993399-070119-b9bec860fcf72e513a288bf609f3700c-454772336";
 
   // Configurar CORS
   res.set('Access-Control-Allow-Origin', '*');
