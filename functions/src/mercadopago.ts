@@ -6,9 +6,7 @@ import * as admin from 'firebase-admin';
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
 
-const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN!;
-const MP_WEBHOOK_SECRET = process.env.MERCADO_PAGO_WEBHOOK_SECRET!;
-const BASE_URL_FRONTEND = process.env.BASE_URL_FRONTEND!;
+// Variáveis serão carregadas dentro de cada function
 const MP_API = 'https://api.mercadopago.com';
 
 type PlanId = 'free' | 'standard' | 'medium' | 'ultimate';
@@ -57,6 +55,10 @@ async function updateUserPlan(userId: string, planId: PlanId, months: number) {
 
 // ---------- 1. createPaymentPreference ----------
 export const createPaymentPreference = functions.https.onRequest(async (req, res): Promise<void> => {
+  // Carregar variáveis de ambiente
+  const MP_ACCESS_TOKEN = functions.config().mercadopago.access_token;
+  const BASE_URL_FRONTEND = functions.config().app.base_url_frontend;
+
   // Configurar CORS
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -136,16 +138,20 @@ export const createPaymentPreference = functions.https.onRequest(async (req, res
 });
 
 // ---------- 2. mercadoPagoWebhook ----------
-function verifySignature(rawBody: string, headers: any) {
+function verifySignature(rawBody: string, headers: any, webhookSecret: string) {
   const sig = headers['x-signature'] || '';
-  if (!sig || !MP_WEBHOOK_SECRET) return false;
-  const expected = crypto.createHmac('sha256', MP_WEBHOOK_SECRET).update(rawBody).digest('hex');
+  if (!sig || !webhookSecret) return false;
+  const expected = crypto.createHmac('sha256', webhookSecret).update(rawBody).digest('hex');
   return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
 }
 
 export const mercadoPagoWebhook = functions.https.onRequest(async (req, res): Promise<void> => {
+  // Carregar variáveis de ambiente
+  const MP_ACCESS_TOKEN = functions.config().mercadopago.access_token;
+  const MP_WEBHOOK_SECRET = functions.config().mercadopago.webhook_secret;
+
   const rawBody = (req as any).rawBody?.toString() || JSON.stringify(req.body);
-  if (!verifySignature(rawBody, req.headers)) {
+  if (!verifySignature(rawBody, req.headers, MP_WEBHOOK_SECRET)) {
     res.status(401).send('Invalid signature');
     return;
   }
@@ -190,6 +196,9 @@ export const mercadoPagoWebhook = functions.https.onRequest(async (req, res): Pr
 
 // ---------- 3. checkPaymentStatus ----------
 export const checkPaymentStatus = functions.https.onRequest(async (req, res): Promise<void> => {
+  // Carregar variáveis de ambiente
+  const MP_ACCESS_TOKEN = functions.config().mercadopago.access_token;
+
   // Configurar CORS
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
