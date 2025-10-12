@@ -18,7 +18,7 @@ const PLANOS: Record<PlanId, {
   max_funcionarios: number;
 }> = {
   free: { nome: 'Free', preco_mensal: 0, preco_anual: 0, max_funcionarios: 1 },
-  standard: { nome: 'Standard', preco_mensal: 1, preco_anual: 10.20, max_funcionarios: 5 },
+  standard: { nome: 'Standard', preco_mensal: 29.90, preco_anual: 299.90, max_funcionarios: 5 },
   medium: { nome: 'Medium', preco_mensal: 49.90, preco_anual: 509.16, max_funcionarios: 10 },
   ultimate: { nome: 'Ultimate', preco_mensal: 99.90, preco_anual: 1018.32, max_funcionarios: 50 },
 };
@@ -72,6 +72,9 @@ export const createPaymentPreference = functions.https.onRequest(async (req, res
     const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN || "APP_USR-5496244105993399-070119-b9bec860fcf72e513a288bf609f3700c-454772336";
     const BASE_URL_FRONTEND = process.env.BASE_URL_FRONTEND || "https://optify-definitivo.web.app/";
     
+    // Log para debug
+    console.log('DEBUG: Token sendo usado:', MP_ACCESS_TOKEN.substring(0, 20) + '...');
+    
     if (!MP_ACCESS_TOKEN || !BASE_URL_FRONTEND) {
       res.status(500).json({ error: 'Configuração do servidor incompleta' });
       return;
@@ -109,11 +112,8 @@ export const createPaymentPreference = functions.https.onRequest(async (req, res
       external_reference,
       metadata: { userId, userEmail, planId, billingType },
       payment_methods: {
-        excluded_payment_types: [],
-        excluded_payment_methods: [],
         installments: 12
       },
-      notification_url: `${BASE_URL_FRONTEND.replace('web.app', 'web.app')}/api/webhook/mercadopago`,
     };
 
     const resp = await fetch(`${MP_API}/checkout/preferences`, {
