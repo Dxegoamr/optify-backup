@@ -55,18 +55,25 @@ async function updateUserPlan(userId: string, planId: PlanId, months: number) {
 
 // ---------- 1. createPaymentPreference ----------
 export const createPaymentPreference = functions.https.onRequest(async (req, res): Promise<void> => {
-  // Carregar variáveis de ambiente
-  const MP_ACCESS_TOKEN = functions.config().mercadopago.access_token;
-  const BASE_URL_FRONTEND = functions.config().app.base_url_frontend;
-
-  // Configurar CORS
+  // Configurar CORS primeiro
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.set('Access-Control-Max-Age', '3600');
 
   // Responder a requisições OPTIONS (preflight)
   if (req.method === 'OPTIONS') {
-    res.status(200).send('');
+    res.status(204).send('');
+    return;
+  }
+
+  // Carregar variáveis de ambiente após CORS
+  const MP_ACCESS_TOKEN = functions.config().mercadopago?.access_token || process.env.MERCADO_PAGO_ACCESS_TOKEN;
+  const BASE_URL_FRONTEND = functions.config().app?.base_url_frontend || process.env.BASE_URL_FRONTEND;
+  
+  if (!MP_ACCESS_TOKEN || !BASE_URL_FRONTEND) {
+    console.error('Variáveis de ambiente não encontradas:', { MP_ACCESS_TOKEN: !!MP_ACCESS_TOKEN, BASE_URL_FRONTEND: !!BASE_URL_FRONTEND });
+    res.status(500).json({ error: 'Configuração do servidor incompleta' });
     return;
   }
 
