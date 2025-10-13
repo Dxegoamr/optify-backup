@@ -431,7 +431,7 @@ const AdminTabs = () => {
         const result = await deleteUserCompletely(
           userToDelete.id,
           userToDelete.email,
-          currentUser?.email || undefined
+          currentUser
         );
 
         if (result.success) {
