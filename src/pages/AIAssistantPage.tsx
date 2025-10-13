@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { useAIAssistant } from '@/hooks/useAIAssistant';
 import { QuickActions } from '@/components/ai-assistant/QuickActions';
 import { AIAssistant } from '@/components/ai-assistant/AIAssistant';
+import { isOpenAIConfigured } from '@/integrations/openai/config';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Bot, User, Send, MessageCircle, RotateCcw, Brain } from 'lucide-react';
+import { Bot, User, Send, MessageCircle, RotateCcw, Brain, Sparkles } from 'lucide-react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 
 export default function AIAssistantPage() {
@@ -43,12 +44,21 @@ export default function AIAssistantPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold flex items-center gap-3">
-              <Brain className="h-8 w-8 text-primary" />
-              Assistente AI
-            </h1>
-            <p className="text-muted-foreground mt-2">
+            <div className="flex items-center gap-3 mb-2">
+              <h1 className="text-3xl font-bold flex items-center gap-3">
+                <Brain className="h-8 w-8 text-primary" />
+                Assistente AI
+              </h1>
+              {isOpenAIConfigured && (
+                <Badge variant="secondary" className="text-sm">
+                  <Sparkles className="h-4 w-4 mr-1" />
+                  Powered by GPT-4o Mini
+                </Badge>
+              )}
+            </div>
+            <p className="text-muted-foreground">
               Seu assistente pessoal para operações no sistema Optify
+              {!isOpenAIConfigured && ' • Usando respostas locais'}
             </p>
           </div>
           <div className="flex gap-2">

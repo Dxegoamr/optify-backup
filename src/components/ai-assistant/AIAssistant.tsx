@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
 import { aiAssistantService, ChatMessage } from '@/core/services/ai-assistant.service';
+import { isOpenAIConfigured } from '@/integrations/openai/config';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Bot, User, Send, MessageCircle, X, RotateCcw } from 'lucide-react';
+import { Bot, User, Send, MessageCircle, X, RotateCcw, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface AIAssistantProps {
@@ -147,6 +148,12 @@ export const AIAssistant = ({ className }: AIAssistantProps) => {
               <div className="flex items-center gap-2">
                 <Bot className="h-5 w-5 text-primary" />
                 <CardTitle className="text-lg">Assistente Optify</CardTitle>
+                {isOpenAIConfigured && (
+                  <Badge variant="secondary" className="text-xs">
+                    <Sparkles className="h-3 w-3 mr-1" />
+                    GPT-4o Mini
+                  </Badge>
+                )}
               </div>
               <div className="flex items-center gap-1">
                 <Button
@@ -168,6 +175,11 @@ export const AIAssistant = ({ className }: AIAssistantProps) => {
                 </Button>
               </div>
             </div>
+            {!isOpenAIConfigured && (
+              <p className="text-xs text-muted-foreground mt-2">
+                💡 Usando respostas locais • Configure OpenAI para respostas mais inteligentes
+              </p>
+            )}
           </CardHeader>
 
           <CardContent className="flex flex-col h-[400px] p-0">

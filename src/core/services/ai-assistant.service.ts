@@ -1,5 +1,6 @@
 import { db } from '@/integrations/firebase/config';
 import { collection, addDoc, getDocs, query, orderBy, limit, where, deleteDoc, doc } from 'firebase/firestore';
+import { openai, isOpenAIConfigured, GPT_MODEL, SYSTEM_PROMPT } from '@/integrations/openai/config';
 
 export interface ChatMessage {
   id?: string;
@@ -239,8 +240,8 @@ class AIAssistantService {
         content: userMessage
       });
 
-      // Gerar resposta do assistente
-      const assistantResponse = this.generateResponse(userMessage, recentMessages);
+      // Gerar resposta do assistente usando GPT-4o Mini
+      const assistantResponse = await this.generateResponseWithGPT(userMessage, recentMessages);
       
       // Salvar resposta do assistente
       await this.saveMessage(userId, {
@@ -260,9 +261,60 @@ class AIAssistantService {
   }
 
   /**
-   * Gera resposta baseada na mensagem do usuário e contexto
+   * Gera resposta usando GPT-4o Mini ou fallback local
    */
-  private generateResponse(userMessage: string, context: ChatMessage[]): string {
+  private async generateResponseWithGPT(userMessage: string, context: ChatMessage[]): Promise<string> {
+    // Se OpenAI não estiver configurada, usar fallback local
+    if (!isOpenAIConfigured) {
+      return this.generateLocalResponse(userMessage, context);
+    }
+
+    try {
+      // Preparar mensagens para o GPT
+      const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+        { role: 'system', content: SYSTEM_PROMPT }
+      ];
+
+      // Adicionar contexto das mensagens anteriores (últimas 5 para economizar tokens)
+      const recentContext = context.slice(-5);
+      for (const msg of recentContext) {
+        messages.push({
+          role: msg.role,
+          content: msg.content
+        });
+      }
+
+      // Adicionar mensagem atual do usuário
+      messages.push({
+        role: 'user',
+        content: userMessage
+      });
+
+      // Chamar API do GPT-4o Mini
+      const completion = await openai.chat.completions.create({
+        model: GPT_MODEL,
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 500,
+        top_p: 1,
+        frequency_penalty: 0,
+        presence_penalty: 0,
+      });
+
+      const response = completion.choices[0]?.message?.content || 'Desculpe, não consegui gerar uma resposta.';
+      return response.trim();
+
+    } catch (error) {
+      console.error('Erro ao chamar OpenAI API:', error);
+      // Fallback para resposta local em caso de erro
+      return this.generateLocalResponse(userMessage, context);
+    }
+  }
+
+  /**
+   * Gera resposta local (fallback quando GPT não está disponível)
+   */
+  private generateLocalResponse(userMessage: string, context: ChatMessage[]): string {
     const message = userMessage.toLowerCase();
     
     // Buscar pergunta comum
