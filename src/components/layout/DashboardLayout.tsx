@@ -4,6 +4,7 @@ import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
 import { usePlanLimitations } from '@/hooks/usePlanLimitations';
 import { useMobile } from '@/hooks/useMobile';
 import { usePreload } from '@/hooks/usePreload';
+import { AIAssistant } from '@/components/ai-assistant/AIAssistant';
 import { 
   LayoutDashboard, 
   Users, 
@@ -20,7 +21,8 @@ import {
   Clock,
   Crown,
   Menu,
-  X
+  X,
+  Bot
 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -97,6 +99,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     { icon: PieChart, label: 'Saldos', path: '/saldos', requiredFeature: 'balances' },
     { icon: TrendingUp, label: 'Relatórios', path: '/relatorios', requiredFeature: 'reports' },
     { icon: Calendar, label: 'Histórico', path: '/historico', requiredFeature: 'history' },
+    { icon: Bot, label: 'Assistente AI', path: '/assistente', requiredFeature: 'dashboard' },
     { icon: Crown, label: 'Planos', path: '/planos', requiredFeature: 'dashboard' },
     // Afiliados - apenas para administradores (em fase de construção)
     ...((isAdmin || user?.email === 'diegkamor@gmail.com') ? [{ icon: Gift, label: 'Afiliados', path: '/afiliados', requiredFeature: 'dashboard' }] : []),
@@ -288,6 +291,9 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           {children}
         </div>
       </main>
+
+      {/* AI Assistant */}
+      <AIAssistant />
     </div>
   );
 };

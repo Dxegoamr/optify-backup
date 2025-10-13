@@ -241,3 +241,4 @@ export { Clock as Time } from 'lucide-react';
 export { Crown as Premium } from 'lucide-react';
 export { PoundSterling as Pound } from 'lucide-react';
 export { JapaneseYen as Yen } from 'lucide-react';
+export { Bot } from 'lucide-react';
