@@ -57,8 +57,33 @@ export const AI_TOOLS = [
   {
     type: 'function' as const,
     function: {
+      name: 'registrar_saque',
+      description: 'Registra um saque/retirada da conta de um funcionário. Use quando o usuário mencionar saque, retirada, sacar dinheiro, tirei dinheiro, etc.',
+      parameters: {
+        type: 'object',
+        properties: {
+          valor: {
+            type: 'number',
+            description: 'Valor do saque em reais (apenas números, sem R$)'
+          },
+          funcionario_nome: {
+            type: 'string',
+            description: 'Nome do funcionário que está sacando'
+          },
+          descricao: {
+            type: 'string',
+            description: 'Descrição ou motivo do saque. Opcional.'
+          }
+        },
+        required: ['valor', 'funcionario_nome']
+      }
+    }
+  },
+  {
+    type: 'function' as const,
+    function: {
       name: 'registrar_despesa',
-      description: 'Registra uma despesa/gasto no sistema. Use quando o usuário mencionar despesa, gasto, pagamento feito, saída de dinheiro, compra, etc.',
+      description: 'Registra uma despesa/gasto geral da empresa (não de funcionário específico). Use quando o usuário mencionar despesa da empresa, pagamento de conta, gasto operacional, etc.',
       parameters: {
         type: 'object',
         properties: {
@@ -140,6 +165,15 @@ export interface FechamentoDiaResult {
   totalDespesas?: number;
   saldo?: number;
   transacoes?: number;
+}
+
+export interface SaqueResult {
+  success: boolean;
+  message: string;
+  transacaoId?: string;
+  valor?: number;
+  funcionario?: string;
+  saldoRestante?: number;
 }
 
 export interface DespesaResult {

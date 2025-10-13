@@ -2,6 +2,7 @@ import { db } from '../config/firebase';
 import { 
   DepositoResult, 
   FechamentoDiaResult, 
+  SaqueResult,
   DespesaResult, 
   SaldoResult,
   FuncionariosResult 
@@ -17,24 +18,40 @@ export async function executarRegistroDeposito(
   try {
     const { valor, funcionario_nome, plataforma, descricao } = params;
 
-    // Buscar funcionário pelo nome
-    const funcionariosRef = db.collection('users').doc(userId).collection('employees');
-    const funcionariosSnapshot = await funcionariosRef
-      .where('nome', '>=', funcionario_nome.toLowerCase())
-      .where('nome', '<=', funcionario_nome.toLowerCase() + '\uf8ff')
-      .limit(1)
-      .get();
+    console.log('🔍 Buscando funcionário:', funcionario_nome);
 
-    if (funcionariosSnapshot.empty) {
+    // Buscar funcionário pelo nome (busca case-insensitive e parcial)
+    const funcionariosRef = db.collection('users').doc(userId).collection('employees');
+    const allFuncionariosSnapshot = await funcionariosRef.get();
+    
+    const nomeBusca = funcionario_nome.toLowerCase().trim();
+    let funcionarioDoc = null;
+    
+    // Buscar por correspondência parcial ou exata
+    for (const doc of allFuncionariosSnapshot.docs) {
+      const funcionarioNome = (doc.data().nome || '').toLowerCase();
+      if (funcionarioNome.includes(nomeBusca) || nomeBusca.includes(funcionarioNome)) {
+        funcionarioDoc = doc;
+        break;
+      }
+    }
+
+    if (!funcionarioDoc) {
+      // Listar funcionários disponíveis
+      const funcionariosDisponiveis = allFuncionariosSnapshot.docs
+        .map(d => d.data().nome)
+        .join(', ');
+      
       return {
         success: false,
-        message: `Funcionário "${funcionario_nome}" não encontrado. Por favor, verifique o nome ou cadastre o funcionário primeiro.`
+        message: `❌ Funcionário "${funcionario_nome}" não encontrado.\n\n📋 Funcionários disponíveis: ${funcionariosDisponiveis || 'Nenhum cadastrado'}\n\n💡 Dica: Cadastre o funcionário primeiro ou use um nome da lista.`
       };
     }
 
-    const funcionarioDoc = funcionariosSnapshot.docs[0];
     const funcionarioData = funcionarioDoc.data();
     const funcionarioId = funcionarioDoc.id;
+    
+    console.log('✅ Funcionário encontrado:', funcionarioData.nome);
 
     // Criar transação
     const transacaoData = {
@@ -76,6 +93,101 @@ export async function executarRegistroDeposito(
     return {
       success: false,
       message: `❌ Erro ao registrar depósito: ${error.message}`
+    };
+  }
+}
+
+/**
+ * Registra um saque da conta de um funcionário
+ */
+export async function executarRegistroSaque(
+  params: any,
+  userId: string
+): Promise<SaqueResult> {
+  try {
+    const { valor, funcionario_nome, descricao } = params;
+
+    console.log('🔍 Buscando funcionário para saque:', funcionario_nome);
+
+    // Buscar funcionário pelo nome
+    const funcionariosRef = db.collection('users').doc(userId).collection('employees');
+    const allFuncionariosSnapshot = await funcionariosRef.get();
+    
+    const nomeBusca = funcionario_nome.toLowerCase().trim();
+    let funcionarioDoc = null;
+    
+    for (const doc of allFuncionariosSnapshot.docs) {
+      const funcionarioNome = (doc.data().nome || '').toLowerCase();
+      if (funcionarioNome.includes(nomeBusca) || nomeBusca.includes(funcionarioNome)) {
+        funcionarioDoc = doc;
+        break;
+      }
+    }
+
+    if (!funcionarioDoc) {
+      const funcionariosDisponiveis = allFuncionariosSnapshot.docs
+        .map(d => d.data().nome)
+        .join(', ');
+      
+      return {
+        success: false,
+        message: `❌ Funcionário "${funcionario_nome}" não encontrado.\n\n📋 Funcionários disponíveis: ${funcionariosDisponiveis || 'Nenhum cadastrado'}`
+      };
+    }
+
+    const funcionarioData = funcionarioDoc.data();
+    const funcionarioId = funcionarioDoc.id;
+    const saldoAtual = funcionarioData.saldoAtual || 0;
+
+    // Verificar se tem saldo suficiente
+    if (saldoAtual < Number(valor)) {
+      return {
+        success: false,
+        message: `❌ Saldo insuficiente!\n\n👤 Funcionário: ${funcionarioData.nome}\n💰 Saldo atual: R$ ${saldoAtual.toFixed(2)}\n💸 Valor do saque: R$ ${Number(valor).toFixed(2)}\n📊 Faltam: R$ ${(Number(valor) - saldoAtual).toFixed(2)}`
+      };
+    }
+
+    // Criar transação de saque (despesa do funcionário)
+    const transacaoData = {
+      tipo: 'despesa',
+      valor: Number(valor),
+      funcionarioId: funcionarioId,
+      funcionarioNome: funcionarioData.nome,
+      descricao: descricao || `Saque de R$ ${valor} - ${funcionarioData.nome}`,
+      categoria: 'saque',
+      data: new Date(),
+      createdAt: new Date(),
+      userId: userId,
+      status: 'concluida'
+    };
+
+    const transacaoRef = await db
+      .collection('users')
+      .doc(userId)
+      .collection('transactions')
+      .add(transacaoData);
+
+    // Atualizar saldo do funcionário (diminuir)
+    const novoSaldo = saldoAtual - Number(valor);
+    await funcionariosRef.doc(funcionarioId).update({
+      saldoAtual: novoSaldo,
+      ultimaTransacao: new Date()
+    });
+
+    return {
+      success: true,
+      message: `✅ Saque registrado com sucesso!\n\n💸 Valor: R$ ${Number(valor).toFixed(2)}\n👤 Funcionário: ${funcionarioData.nome}\n💰 Saldo anterior: R$ ${saldoAtual.toFixed(2)}\n📊 Saldo atual: R$ ${novoSaldo.toFixed(2)}\n📝 ID da transação: ${transacaoRef.id}`,
+      transacaoId: transacaoRef.id,
+      valor: Number(valor),
+      funcionario: funcionarioData.nome,
+      saldoRestante: novoSaldo
+    };
+
+  } catch (error: any) {
+    console.error('Erro ao registrar saque:', error);
+    return {
+      success: false,
+      message: `❌ Erro ao registrar saque: ${error.message}`
     };
   }
 }
