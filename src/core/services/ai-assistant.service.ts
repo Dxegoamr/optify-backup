@@ -333,12 +333,13 @@ class AIAssistantService {
       return `Para trabalhar com ${entity.description}: você pode ${entity.operations.join(', ')}. Os campos disponíveis são: ${entity.fields.join(', ')}.`;
     }
 
-    // Resposta genérica baseada no contexto
-    if (context.length > 0) {
-      return 'Entendi sua pergunta. Como posso ajudá-lo com operações no sistema? Você pode me perguntar sobre funcionários, transações, pagamentos, metas ou relatórios.';
+    // Resposta genérica inteligente
+    if (message.includes('oi') || message.includes('olá') || message.includes('bom dia') || message.includes('boa tarde') || message.includes('boa noite')) {
+      return 'Olá! 👋 Sou seu assistente do Optify. Posso ajudá-lo com:\n\n• Cadastro e gestão de funcionários\n• Registro de transações (vendas e despesas)\n• Configuração de metas mensais\n• Geração de relatórios\n• Dúvidas sobre o sistema\n\nE também posso conversar sobre qualquer assunto! 😊\n\nComo posso ajudá-lo hoje?';
     }
 
-    return 'Olá! Sou seu assistente do Optify. Posso ajudá-lo com:\n\n• Cadastro e gestão de funcionários\n• Registro de transações (vendas e despesas)\n• Configuração de metas mensais\n• Geração de relatórios\n• Dúvidas sobre o sistema\n\nComo posso ajudá-lo hoje?';
+    // Se não encontrou nada específico, ser mais útil
+    return `Entendi sua mensagem: "${userMessage}"\n\nPosso ajudá-lo com:\n• Operações do sistema Optify (depósitos, saques, fechamento de dia)\n• Perguntas gerais (história, ciência, matemática, etc.)\n• Conversas casuais\n\nTente perguntar algo específico! 🤔`;
   }
 
   /**
