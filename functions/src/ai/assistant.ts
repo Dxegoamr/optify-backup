@@ -1,13 +1,35 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import OpenAI from 'openai';
+import { AI_TOOLS } from './tools';
+import {
+  executarRegistroDeposito,
+  executarFechamentoDia,
+  executarRegistroDespesa,
+  executarConsultaSaldo,
+  executarListaFuncionarios
+} from './executors';
 
 // Configuração da OpenAI API
 const openai = new OpenAI({
   apiKey: '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'
 });
 
-// System prompt otimizado para o Optify
+// System prompt otimizado para o Optify com Function Calling
 const SYSTEM_PROMPT = `Você é um assistente virtual especializado no sistema Optify, uma plataforma de gestão financeira empresarial.
+
+🎯 IMPORTANTE: Você pode EXECUTAR AÇÕES no sistema usando as functions disponíveis:
+- registrar_deposito: Para registrar depósitos/receitas
+- fechar_dia: Para fechar o dia e calcular totais
+- registrar_despesa: Para registrar despesas/gastos
+- consultar_saldo: Para consultar saldos
+- listar_funcionarios: Para listar funcionários
+
+Use linguagem natural para entender intenções como:
+- "depositei 300 na conta do diego" → chamar registrar_deposito
+- "fiz um deposito na betano do joão de 500" → chamar registrar_deposito
+- "feche o dia" ou "fechar o dia atual" → chamar fechar_dia
+- "quanto está o saldo do diego?" → chamar consultar_saldo
+- "registrar despesa de 100 reais em aluguel" → chamar registrar_despesa
 
 SOBRE O SISTEMA OPTIFY:
 O Optify é um sistema completo de gestão que permite:
@@ -141,19 +163,82 @@ export const generateAIResponse = onCall<GenerateResponseRequest>(
         content: message
       });
 
-      // Chamar OpenAI API com GPT-4o mini
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini', // Modelo mais recente e econômico
+      // Chamar OpenAI API com GPT-4o mini e tools
+      let completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
         messages: messages,
+        tools: AI_TOOLS as any,
+        tool_choice: 'auto', // Deixar o modelo decidir quando usar tools
         temperature: 0.7,
         max_tokens: 500,
-        top_p: 1,
-        frequency_penalty: 0,
-        presence_penalty: 0,
-        user: request.auth.uid, // Para tracking e segurança
+        user: request.auth.uid,
       });
 
-      const response = completion.choices[0]?.message?.content || 'Desculpe, não consegui gerar uma resposta.';
+      let responseMessage = completion.choices[0]?.message;
+      
+      // Se o modelo decidiu chamar uma function
+      if (responseMessage?.tool_calls && responseMessage.tool_calls.length > 0) {
+        console.log(`🔧 GPT decidiu chamar ${responseMessage.tool_calls.length} function(s)`);
+        
+        // Adicionar a resposta do assistente às mensagens
+        messages.push(responseMessage as any);
+
+        // Executar cada function call
+        for (const toolCall of responseMessage.tool_calls) {
+          const functionName = toolCall.function.name;
+          const functionArgs = JSON.parse(toolCall.function.arguments);
+
+          console.log(`⚙️ Executando: ${functionName}`, functionArgs);
+
+          let functionResult: any;
+
+          // Executar a function apropriada
+          switch (functionName) {
+            case 'registrar_deposito':
+              functionResult = await executarRegistroDeposito(functionArgs, request.auth.uid);
+              break;
+            case 'fechar_dia':
+              functionResult = await executarFechamentoDia(functionArgs, request.auth.uid);
+              break;
+            case 'registrar_despesa':
+              functionResult = await executarRegistroDespesa(functionArgs, request.auth.uid);
+              break;
+            case 'consultar_saldo':
+              functionResult = await executarConsultaSaldo(functionArgs, request.auth.uid);
+              break;
+            case 'listar_funcionarios':
+              functionResult = await executarListaFuncionarios(functionArgs, request.auth.uid);
+              break;
+            default:
+              functionResult = {
+                success: false,
+                message: `Function ${functionName} não implementada`
+              };
+          }
+
+          console.log(`✅ Function ${functionName} executada:`, functionResult.success);
+
+          // Adicionar resultado da function às mensagens
+          messages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: JSON.stringify(functionResult)
+          } as any);
+        }
+
+        // Fazer uma segunda chamada ao GPT para gerar resposta final
+        completion = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: messages,
+          temperature: 0.7,
+          max_tokens: 500,
+          user: request.auth.uid,
+        });
+
+        responseMessage = completion.choices[0]?.message;
+      }
+
+      const response = responseMessage?.content || 'Desculpe, não consegui gerar uma resposta.';
 
       console.log(`✅ Resposta gerada com sucesso para: ${request.auth.uid}`);
 
