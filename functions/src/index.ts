@@ -48,3 +48,6 @@ export {
 
 // Export LGPD functions
 export { exportUserData, cleanupOldExports } from './lgpd/export-user-data';
+
+// Export AI Assistant functions
+export { generateAIResponse } from './ai/assistant';

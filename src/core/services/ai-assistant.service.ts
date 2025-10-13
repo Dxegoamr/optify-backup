@@ -1,6 +1,6 @@
-import { db } from '@/integrations/firebase/config';
+import { db, functions } from '@/integrations/firebase/config';
 import { collection, addDoc, getDocs, query, orderBy, limit, where, deleteDoc, doc } from 'firebase/firestore';
-import { openai, isOpenAIConfigured, GPT_MODEL, SYSTEM_PROMPT } from '@/integrations/openai/config';
+import { httpsCallable } from 'firebase/functions';
 
 export interface ChatMessage {
   id?: string;
@@ -261,52 +261,41 @@ class AIAssistantService {
   }
 
   /**
-   * Gera resposta usando GPT-4o Mini ou fallback local
+   * Gera resposta usando GPT-4o Mini via Cloud Function ou fallback local
    */
   private async generateResponseWithGPT(userMessage: string, context: ChatMessage[]): Promise<string> {
-    // Se OpenAI não estiver configurada, usar fallback local
-    if (!isOpenAIConfigured) {
-      return this.generateLocalResponse(userMessage, context);
-    }
-
     try {
-      // Preparar mensagens para o GPT
-      const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-        { role: 'system', content: SYSTEM_PROMPT }
-      ];
-
-      // Adicionar contexto das mensagens anteriores (últimas 5 para economizar tokens)
-      const recentContext = context.slice(-5);
-      for (const msg of recentContext) {
-        messages.push({
+      // Chamar Cloud Function que usa GPT-4o mini
+      const generateAIResponse = httpsCallable(functions, 'generateAIResponse');
+      
+      const result = await generateAIResponse({
+        message: userMessage,
+        context: context.slice(-5).map(msg => ({
           role: msg.role,
           content: msg.content
-        });
+        }))
+      });
+
+      const data = result.data as { response: string; model: string; usage: any };
+      
+      console.log(`✅ Resposta gerada com ${data.model} - Tokens: ${data.usage?.totalTokens || 0}`);
+      
+      return data.response;
+
+    } catch (error: any) {
+      console.error('Erro ao chamar Cloud Function:', error);
+      
+      // Se o erro for de autenticação ou rate limit, mostrar mensagem específica
+      if (error.code === 'resource-exhausted') {
+        return 'Desculpe, o limite de requisições foi excedido. Tente novamente em alguns instantes.';
       }
-
-      // Adicionar mensagem atual do usuário
-      messages.push({
-        role: 'user',
-        content: userMessage
-      });
-
-      // Chamar API do GPT-4o Mini
-      const completion = await openai.chat.completions.create({
-        model: GPT_MODEL,
-        messages: messages,
-        temperature: 0.7,
-        max_tokens: 500,
-        top_p: 1,
-        frequency_penalty: 0,
-        presence_penalty: 0,
-      });
-
-      const response = completion.choices[0]?.message?.content || 'Desculpe, não consegui gerar uma resposta.';
-      return response.trim();
-
-    } catch (error) {
-      console.error('Erro ao chamar OpenAI API:', error);
+      
+      if (error.code === 'unauthenticated') {
+        return 'Erro de autenticação. Por favor, faça login novamente.';
+      }
+      
       // Fallback para resposta local em caso de erro
+      console.log('📝 Usando resposta local como fallback');
       return this.generateLocalResponse(userMessage, context);
     }
   }

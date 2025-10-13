@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useAIAssistant } from '@/hooks/useAIAssistant';
 import { QuickActions } from '@/components/ai-assistant/QuickActions';
 import { AIAssistant } from '@/components/ai-assistant/AIAssistant';
-import { isOpenAIConfigured } from '@/integrations/openai/config';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -49,16 +48,13 @@ export default function AIAssistantPage() {
                 <Brain className="h-8 w-8 text-primary" />
                 Assistente AI
               </h1>
-              {isOpenAIConfigured && (
-                <Badge variant="secondary" className="text-sm">
-                  <Sparkles className="h-4 w-4 mr-1" />
-                  Powered by GPT-4o Mini
-                </Badge>
-              )}
+              <Badge variant="secondary" className="text-sm">
+                <Sparkles className="h-4 w-4 mr-1" />
+                Powered by GPT-4o Mini
+              </Badge>
             </div>
             <p className="text-muted-foreground">
               Seu assistente pessoal para operações no sistema Optify
-              {!isOpenAIConfigured && ' • Usando respostas locais'}
             </p>
           </div>
           <div className="flex gap-2">
