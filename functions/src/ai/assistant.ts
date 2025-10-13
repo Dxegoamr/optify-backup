@@ -10,14 +10,20 @@ import {
 } from './executors';
 
 // Configuração da OpenAI API
-// A chave deve ser configurada via Firebase Functions Config ou Secret Manager
-// Comando: firebase functions:config:set openai.key="sua-chave-aqui"
+// A chave DEVE ser configurada via variável de ambiente ou Firebase Functions Config
+// Desenvolvimento: criar arquivo .env com OPENAI_API_KEY=sua-chave
+// Produção: firebase functions:config:set openai.key="sua-chave"
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || 
-  (typeof functions !== 'undefined' && (functions as any).config?.()?.openai?.key) ||
-  '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'; // Fallback apenas para desenvolvimento local
+  (typeof functions !== 'undefined' && (functions as any).config?.()?.openai?.key);
+
+if (!OPENAI_API_KEY) {
+  console.error('❌ OPENAI_API_KEY não configurada! Configure usando:');
+  console.error('   - Variável de ambiente: OPENAI_API_KEY=sua-chave');
+  console.error('   - Firebase config: firebase functions:config:set openai.key="sua-chave"');
+}
 
 const openai = new OpenAI({
-  apiKey: OPENAI_API_KEY
+  apiKey: OPENAI_API_KEY || 'dummy-key-will-fail' // Vai falhar se não configurado
 });
 
 // System prompt otimizado para o Optify com Function Calling
