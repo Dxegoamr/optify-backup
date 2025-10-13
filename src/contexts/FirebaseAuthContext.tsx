@@ -68,8 +68,8 @@ export const FirebaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
       
-      // TODO: Habilitar após instalar @sentry/react
-      // setSentryUser(user);
+      // Configurar usuário no Sentry
+      setSentryUser(user);
       
       if (user) {
         try {

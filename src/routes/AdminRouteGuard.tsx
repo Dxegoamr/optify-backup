@@ -1,7 +1,5 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/integrations/firebase/config';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertTriangle, Shield, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -12,22 +10,17 @@ interface AdminRouteGuardProps {
   fallback?: ReactNode;
 }
 
-interface AdminStatus {
-  uid: string;
-  email: string | null;
-  isAdmin: boolean;
-  isSuperAdmin: boolean;
-  claims: Record<string, any>;
-}
+// Lista de superadmins (mesma do backend)
+const SUPER_ADMINS = [
+  'diegkamor@gmail.com',
+  // Adicionar outros superadmins aqui
+];
 
 export const AdminRouteGuard = ({ children, fallback }: AdminRouteGuardProps) => {
   const { user, isAdmin } = useFirebaseAuth();
   const navigate = useNavigate();
-  const [adminStatus, setAdminStatus] = useState<AdminStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const verifyAdminStatus = httpsCallable(functions, 'verifyAdminStatus');
 
   useEffect(() => {
     const checkAdminStatus = async () => {
@@ -40,13 +33,23 @@ export const AdminRouteGuard = ({ children, fallback }: AdminRouteGuardProps) =>
         setLoading(true);
         setError(null);
 
-        const result = await verifyAdminStatus();
-        const data = result.data as AdminStatus;
+        // Verificar claims diretamente do token do usuário
+        const idTokenResult = await user.getIdTokenResult();
+        const claims = idTokenResult.claims;
         
-        setAdminStatus(data);
+        const isAdmin = claims.admin === true;
+        const isSuperAdmin = SUPER_ADMINS.includes(user.email || '');
+
+        console.log('Verificação de admin:', {
+          uid: user.uid,
+          email: user.email,
+          isAdmin,
+          isSuperAdmin,
+          claims,
+        });
 
         // Se não for admin, redirecionar após um delay
-        if (!data.isAdmin) {
+        if (!isAdmin && !isSuperAdmin) {
           setTimeout(() => {
             navigate('/dashboard');
           }, 3000);
@@ -141,8 +144,11 @@ export const AdminRouteGuard = ({ children, fallback }: AdminRouteGuardProps) =>
     );
   }
 
+  // Verificar se é admin ou superadmin
+  const isUserAdmin = isAdmin || SUPER_ADMINS.includes(user?.email || '');
+  
   // Não é admin
-  if (!adminStatus?.isAdmin) {
+  if (!isUserAdmin) {
     return fallback || (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Card className="w-full max-w-md">

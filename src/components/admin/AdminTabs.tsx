@@ -118,6 +118,19 @@ const AdminTabs = () => {
 
   const availablePlans = getAvailablePlans();
 
+  // Função helper para verificar se pode excluir usuário (síncrona)
+  const canDeleteUserSync = (targetUserId: string): boolean => {
+    if (!currentUser) return false;
+    
+    const isAdmin = currentUser.claims?.admin === true;
+    const isSuperAdmin = currentUser.email && ['diegkamor@gmail.com'].includes(currentUser.email);
+    
+    if (!isAdmin && !isSuperAdmin) return false;
+    if (targetUserId === currentUser.uid) return false;
+    
+    return true;
+  };
+
   // Buscar usuários
   useEffect(() => {
     const fetchUsers = async () => {
@@ -400,8 +413,9 @@ const AdminTabs = () => {
     }
 
     // Verificar se pode excluir o usuário
-    if (!canDeleteUser(userToDelete.id, currentUser?.uid)) {
-      toast.error('Não é possível excluir este usuário');
+    const canDeleteResult = await canDeleteUser(userToDelete.id, currentUser);
+    if (!canDeleteResult.canDelete) {
+      toast.error(canDeleteResult.reason);
       return;
     }
 
@@ -1068,7 +1082,7 @@ const AdminTabs = () => {
                               variant="destructive"
                               onClick={() => handleDeleteUser(user)}
                               className="flex items-center gap-1"
-                              disabled={!canDeleteUser(user.id, currentUser?.uid)}
+                              disabled={!canDeleteUserSync(user.id)}
                             >
                               <X className="h-3 w-3" />
                               Excluir

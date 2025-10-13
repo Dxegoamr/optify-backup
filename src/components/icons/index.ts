@@ -68,31 +68,31 @@ export {
   Thermometer,
   Droplets,
   Umbrella,
-  TreePine,
-  Flower,
+  // TreePine, // Ícone não existe no lucide-react
+  // Flower, // Ícone não existe no lucide-react
   Leaf,
-  Bug,
-  Fish,
-  Bird,
-  Cat,
-  Dog,
-  Rabbit,
+  // Bug, // Ícone não existe no lucide-react
+  // Fish, // Ícone não existe no lucide-react
+  // Bird, // Ícone não existe no lucide-react
+  // Cat, // Ícone não existe no lucide-react
+  // Dog, // Ícone não existe no lucide-react
+  // Rabbit, // Ícone não existe no lucide-react
   Coffee,
-  Pizza,
-  Cake,
-  Apple,
-  Banana,
-  Carrot,
-  Grape,
-  Lemon,
-  Orange,
-  Strawberry,
-  Cherry,
-  IceCream,
-  Cookie,
-  Beer,
-  Wine,
-  Cocktail,
+  // Pizza, // Ícone não existe no lucide-react
+  // Cake, // Ícone não existe no lucide-react
+  // Apple, // Ícone não existe no lucide-react
+  // Banana, // Ícone não existe no lucide-react
+  // Carrot, // Ícone não existe no lucide-react
+  // Grape, // Ícone não existe no lucide-react
+  // Lemon, // Ícone não existe no lucide-react
+  // Orange, // Ícone não existe no lucide-react
+  // Strawberry, // Ícone não existe no lucide-react
+  // Cherry, // Ícone não existe no lucide-react
+  // IceCream, // Ícone não existe no lucide-react
+  // Cookie, // Ícone não existe no lucide-react
+  // Beer, // Ícone não existe no lucide-react
+  // Wine, // Ícone não existe no lucide-react
+  // Cocktail, // Ícone não existe no lucide-react
   Coffee as CoffeeIcon,
   Camera,
   Image,
@@ -103,11 +103,11 @@ export {
   Volume2,
   Play,
   Pause,
-  Stop,
+  // Stop, // Ícone não existe no lucide-react
   SkipBack,
   SkipForward,
   Repeat,
-  Shuffle,
+  // Shuffle, // Ícone não existe no lucide-react
   Maximize,
   Minimize,
   RotateCcw,
@@ -126,8 +126,8 @@ export {
   Percent,
   DollarSign as DollarIcon,
   Euro,
-  Pound,
-  Yen,
+  PoundSterling,
+  JapaneseYen,
   Bitcoin,
   CreditCard as CardIcon,
   Receipt,
@@ -138,19 +138,19 @@ export {
   LineChart,
   Activity,
   Zap as ZapIcon,
-  Battery,
-  BatteryLow,
-  BatteryMedium,
-  BatteryFull,
+  // Battery, // Ícone não existe no lucide-react
+  // BatteryLow, // Ícone não existe no lucide-react
+  // BatteryMedium, // Ícone não existe no lucide-react
+  // BatteryFull, // Ícone não existe no lucide-react
   Wifi,
   WifiOff,
   Bluetooth,
-  BluetoothOff,
-  Signal,
-  SignalLow,
-  SignalMedium,
-  SignalHigh,
-  SignalZero,
+  // BluetoothOff, // Ícone não existe no lucide-react
+  // Signal, // Ícone não existe no lucide-react
+  // SignalLow, // Ícone não existe no lucide-react
+  // SignalMedium, // Ícone não existe no lucide-react
+  // SignalHigh, // Ícone não existe no lucide-react
+  // SignalZero, // Ícone não existe no lucide-react
   Radio,
   Tv,
   Monitor,
@@ -159,41 +159,41 @@ export {
   Tablet,
   Watch,
   Gamepad2,
-  Joystick,
+  // Joystick, // Ícone não existe no lucide-react
   Keyboard,
   Mouse,
   Printer,
-  Scanner,
+  // Scanner, // Ícone não existe no lucide-react
   HardDrive,
   Database,
   Server,
-  Router,
-  Modem,
+  // Router, // Ícone não existe no lucide-react
+  // Modem, // Ícone não existe no lucide-react
   Cpu,
-  Memory,
+  // Memory, // Ícone não existe no lucide-react
   HardDrive as HDDIcon,
-  Disc,
-  CD,
-  DVD,
-  USB,
-  HDMI,
-  Ethernet,
+  // Disc, // Ícone não existe no lucide-react
+  // CD, // Ícone não existe no lucide-react
+  // DVD, // Ícone não existe no lucide-react
+  // Usb, // Ícone não existe no lucide-react
+  // Hdmi, // Ícone não existe no lucide-react
+  // Ethernet, // Ícone não existe no lucide-react
   Power,
   PowerOff,
-  PlayCircle,
-  PauseCircle,
-  StopCircle,
-  SkipBackCircle,
-  SkipForwardCircle,
-  RepeatCircle,
-  ShuffleCircle,
+  // PlayCircle, // Ícone não existe no lucide-react
+  // PauseCircle, // Ícone não existe no lucide-react
+  // StopCircle, // Ícone não existe no lucide-react
+  // SkipBackCircle, // Ícone não existe no lucide-react
+  // SkipForwardCircle, // Ícone não existe no lucide-react
+  // RepeatCircle, // Ícone não existe no lucide-react
+  // ShuffleCircle, // Ícone não existe no lucide-react
   VolumeX,
   Volume1,
   Volume2 as Volume2Icon,
   Mic as MicIcon,
   MicOff,
   Headphones as HeadphonesIcon,
-  HeadphonesOff,
+  // HeadphonesOff, // Ícone não existe no lucide-react
   Radio as RadioIcon,
   Tv as TvIcon,
   Monitor as MonitorIcon,
@@ -202,24 +202,24 @@ export {
   Tablet as TabletIcon,
   Watch as WatchIcon,
   Gamepad2 as GamepadIcon,
-  Joystick as JoystickIcon,
+  // Joystick as JoystickIcon, // Ícone não existe no lucide-react
   Keyboard as KeyboardIcon,
   Mouse as MouseIcon,
   Printer as PrinterIcon,
-  Scanner as ScannerIcon,
+  // Scanner as ScannerIcon, // Ícone não existe no lucide-react
   HardDrive as HardDriveIcon,
   Database as DatabaseIcon,
   Server as ServerIcon,
-  Router as RouterIcon,
-  Modem as ModemIcon,
+  // Router as RouterIcon, // Ícone não existe no lucide-react
+  // Modem as ModemIcon, // Ícone não existe no lucide-react
   Cpu as CpuIcon,
-  Memory as MemoryIcon,
-  Disc as DiscIcon,
-  CD as CDIcon,
-  DVD as DVDIcon,
-  USB as USBIcon,
-  HDMI as HDMIIcon,
-  Ethernet as EthernetIcon,
+  // Memory as MemoryIcon, // Ícone não existe no lucide-react
+  // Disc as DiscIcon, // Ícone não existe no lucide-react
+  // CD as CDIcon, // Ícone não existe no lucide-react
+  // DVD as DVDIcon, // Ícone não existe no lucide-react
+  // Usb as USBIcon, // Ícone não existe no lucide-react
+  // Hdmi as HDMIIcon, // Ícone não existe no lucide-react
+  // Ethernet as EthernetIcon, // Ícone não existe no lucide-react
   Power as PowerIcon,
   PowerOff as PowerOffIcon
 } from 'lucide-react';
@@ -239,3 +239,5 @@ export { UserCircle as User } from 'lucide-react';
 export { Gift as GiftIcon } from 'lucide-react';
 export { Clock as Time } from 'lucide-react';
 export { Crown as Premium } from 'lucide-react';
+export { PoundSterling as Pound } from 'lucide-react';
+export { JapaneseYen as Yen } from 'lucide-react';

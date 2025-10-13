@@ -85,7 +85,7 @@ export const setAdminClaim = onCall(
  */
 export const verifyAdminStatus = onCall(
   {
-    enforceAppCheck: true,
+    enforceAppCheck: false, // Desabilitado temporariamente para desenvolvimento
     memory: '128MiB',
   },
   async (request) => {

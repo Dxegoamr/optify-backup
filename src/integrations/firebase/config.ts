@@ -53,14 +53,15 @@ const initializeAppCheckWithConfig = () => {
 initializeAppCheckWithConfig();
 
 // Conectar emulador em desenvolvimento
-if (import.meta.env.DEV) {
-  try {
-    connectFunctionsEmulator(functions, 'localhost', 5001);
-    console.log('🔧 Conectado ao emulador de Functions');
-  } catch (error) {
-    // Ignorar erro se já conectado
-  }
-}
+// DESABILITADO: Use emulador apenas quando estiver rodando localmente
+// if (import.meta.env.DEV) {
+//   try {
+//     connectFunctionsEmulator(functions, 'localhost', 5001);
+//     console.log('🔧 Conectado ao emulador de Functions');
+//   } catch (error) {
+//     // Ignorar erro se já conectado
+//   }
+// }
 
 export default app;
 

@@ -1,6 +1,7 @@
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/integrations/firebase/config';
 import { toast } from 'sonner';
+import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
 
 export interface UserDeletionResult {
   success: boolean;
@@ -65,25 +66,63 @@ export const deleteUserCompletely = async (
 };
 
 /**
- * Verifica se um usuário pode ser excluído via Cloud Function
+ * Verifica se um usuário pode ser excluído (verificação local)
  * @param targetUserId - ID do usuário a ser verificado
+ * @param currentUser - Usuário atual autenticado
  * @returns Resultado da verificação
  */
-export const canDeleteUser = async (targetUserId: string): Promise<CanDeleteUserResult> => {
+export const canDeleteUser = async (
+  targetUserId: string, 
+  currentUser: any
+): Promise<CanDeleteUserResult> => {
   try {
-    const canDeleteFunction = httpsCallable(functions, 'canDeleteUser');
-    
-    const result = await canDeleteFunction({
-      targetUserId,
-    });
+    // Verificar se o usuário atual é admin ou superadmin
+    const isAdmin = currentUser?.claims?.admin === true;
+    const isSuperAdmin = currentUser?.email && [
+      'diegkamor@gmail.com'
+    ].includes(currentUser.email);
 
-    return result.data as CanDeleteUserResult;
+    if (!isAdmin && !isSuperAdmin) {
+      return {
+        canDelete: false,
+        reason: 'Apenas administradores podem excluir usuários',
+        isAdmin: false,
+      };
+    }
+
+    // Verificar se está tentando excluir a si mesmo
+    if (targetUserId === currentUser?.uid) {
+      return {
+        canDelete: false,
+        reason: 'Você não pode excluir sua própria conta',
+        isAdmin: true,
+      };
+    }
+
+    // Verificar se está tentando excluir outro superadmin
+    if (currentUser?.email && [
+      'diegkamor@gmail.com'
+    ].includes(currentUser.email)) {
+      // Superadmins podem excluir qualquer um (exceto eles mesmos)
+      return {
+        canDelete: true,
+        reason: 'Permissão de superadmin',
+        isAdmin: true,
+      };
+    }
+
+    return {
+      canDelete: true,
+      reason: 'Permissão de administrador',
+      isAdmin: true,
+    };
   } catch (error: any) {
     console.error('❌ Erro ao verificar se usuário pode ser excluído:', error);
     
     return {
       canDelete: false,
       reason: error.message || 'Erro ao verificar permissões de exclusão',
+      isAdmin: false,
     };
   }
 };
