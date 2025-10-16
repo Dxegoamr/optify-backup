@@ -246,7 +246,7 @@ export async function executarFechamentoDia(
       tipo: 'fechamento_diario'
     };
 
-    const fechamentoRef = await db
+    await db
       .collection('users')
       .doc(userId)
       .collection('fechamentos')
@@ -360,7 +360,6 @@ export async function executarConsultaSaldo(
         };
       }
 
-      const funcionarioId = funcionariosSnapshot.docs[0].id;
       const funcionarioData = funcionariosSnapshot.docs[0].data();
       
       return {

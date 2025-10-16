@@ -5,7 +5,8 @@ import {
   createUserWithEmailAndPassword, 
   signOut, 
   onAuthStateChanged,
-  updateProfile 
+  updateProfile,
+  sendPasswordResetEmail
 } from 'firebase/auth';
 import { auth } from '@/integrations/firebase/config';
 import { UserPlatformService } from '@/core/services/user-specific.service';
@@ -23,6 +24,7 @@ interface FirebaseAuthContextType {
   signUp: (email: string, password: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshClaims: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
 }
 
 const FirebaseAuthContext = createContext<FirebaseAuthContextType | undefined>(undefined);
@@ -47,7 +49,21 @@ export const FirebaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const tokenResult = await getIdTokenResult(user, true); // force refresh
       const claims = tokenResult.claims || {};
       setCustomClaims(claims);
-      setIsAdmin(claims.admin === true || user.email === 'diegkamor@gmail.com');
+      
+      // Debug: Log admin verification
+      const isClaimsAdmin = claims.admin === true;
+      const isHardcodedAdmin = user.email === 'diegkamor@gmail.com';
+      const finalIsAdmin = isClaimsAdmin || isHardcodedAdmin;
+      
+      console.log('🔍 FirebaseAuth Admin Debug:', {
+        userEmail: user.email,
+        claims,
+        isClaimsAdmin,
+        isHardcodedAdmin,
+        finalIsAdmin
+      });
+      
+      setIsAdmin(finalIsAdmin);
       return claims;
     } catch (error) {
       console.error('Erro ao obter custom claims:', error);
@@ -148,6 +164,15 @@ export const FirebaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   };
 
+  const resetPassword = async (email: string) => {
+    try {
+      await sendPasswordResetEmail(auth, email);
+    } catch (error) {
+      console.error('Erro ao enviar email de recuperação:', error);
+      throw error;
+    }
+  };
+
   const value = {
     user,
     loading,
@@ -156,7 +181,8 @@ export const FirebaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     signIn,
     signUp,
     logout,
-    refreshClaims
+    refreshClaims,
+    resetPassword
   };
 
   return (

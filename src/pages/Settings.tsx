@@ -34,13 +34,6 @@ const Settings = () => {
               <h3 className="text-lg font-semibold mb-6">Configurações Gerais</h3>
               
               <div className="space-y-6">
-                <div className="space-y-2">
-                  <Label>Horário de Fechamento do Dia</Label>
-                  <Input type="time" defaultValue="23:59" className="max-w-xs" />
-                  <p className="text-sm text-muted-foreground">
-                    Define quando o sistema fecha automaticamente o dia
-                  </p>
-                </div>
 
                 <div className="space-y-2">
                   <Label>Fuso Horário</Label>

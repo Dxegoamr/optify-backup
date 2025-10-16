@@ -128,10 +128,27 @@ export const usePlanLimitations = () => {
   const canAccess = (feature: keyof PlanLimitations['features']) => {
     // Se for painel avançado e o usuário for admin hardcoded, sempre permitir
     if (feature === 'advancedPanel' && isAdminEmail(user?.email)) {
+      console.log('🔍 CanAccess Admin Debug: advancedPanel access granted for admin', {
+        feature,
+        userEmail: user?.email,
+        isAdminEmail: isAdminEmail(user?.email)
+      });
       return true;
     }
     
-    return hasFeatureAccess(currentPlan, feature);
+    const hasAccess = hasFeatureAccess(currentPlan, feature);
+    
+    // Debug para advancedPanel
+    if (feature === 'advancedPanel') {
+      console.log('🔍 CanAccess Admin Debug: advancedPanel access check', {
+        feature,
+        userEmail: user?.email,
+        currentPlan,
+        hasAccess
+      });
+    }
+    
+    return hasAccess;
   };
 
   const canAddMoreEmployees = () => {

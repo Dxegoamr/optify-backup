@@ -21,8 +21,7 @@ import {
   Clock,
   Crown,
   Menu,
-  X,
-  Bot
+  X
 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -99,7 +98,6 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     { icon: PieChart, label: 'Saldos', path: '/saldos', requiredFeature: 'balances' },
     { icon: TrendingUp, label: 'Relatórios', path: '/relatorios', requiredFeature: 'reports' },
     { icon: Calendar, label: 'Histórico', path: '/historico', requiredFeature: 'history' },
-    { icon: Bot, label: 'Assistente AI', path: '/assistente', requiredFeature: 'dashboard' },
     { icon: Crown, label: 'Planos', path: '/planos', requiredFeature: 'dashboard' },
     // Afiliados - apenas para administradores (em fase de construção)
     ...((isAdmin || user?.email === 'diegkamor@gmail.com') ? [{ icon: Gift, label: 'Afiliados', path: '/afiliados', requiredFeature: 'dashboard' }] : []),
@@ -107,12 +105,31 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     return canAccess(item.requiredFeature as any);
   });
 
+  // Debug: Log admin status
+  console.log('🔍 Admin Debug:', {
+    isAdmin,
+    userEmail: user?.email,
+    isAdminEmail: user?.email === 'diegkamor@gmail.com',
+    hasAdminAccess: isAdmin || user?.email === 'diegkamor@gmail.com'
+  });
+
+  // FORÇAR ADMIN TEMPORARIAMENTE PARA DEBUG
+  const forceAdmin = true; // Temporário para debug
+  
+  const adminItem = (isAdmin || user?.email === 'diegkamor@gmail.com' || forceAdmin) ? [{ icon: Shield, label: 'Admin', path: '/admin', requiredFeature: 'advancedPanel' }] : [];
+  
   const bottomNavItems = [
     { icon: UserCircle, label: 'Perfil', path: '/perfil' },
     { icon: Settings, label: 'Configurações', path: '/settings' },
-    // FORÇAR ADMIN PARA diegkamor@gmail.com TEMPORARIAMENTE
-    ...((isAdmin || user?.email === 'diegkamor@gmail.com') ? [{ icon: Shield, label: 'Admin', path: '/admin', requiredFeature: 'advancedPanel' }] : []),
+    ...adminItem,
   ];
+
+  // Debug: Log bottom nav items
+  console.log('🔍 Bottom Nav Debug:', {
+    adminItem,
+    bottomNavItems,
+    adminItemLength: adminItem.length
+  });
 
   const isActive = (path: string) => location.pathname === path;
 

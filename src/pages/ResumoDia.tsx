@@ -823,7 +823,7 @@ const ResumoDia = () => {
                         </Badge>
                       </td>
                       <td className={`p-4 text-right font-semibold ${
-                        transaction.type === 'deposit' ? 'text-destructive' : 'text-success'
+                        transaction.type === 'deposit' ? 'text-success' : 'text-destructive'
                       }`}>
                         {transaction.type === 'deposit' ? '-' : '+'}R$ {Number(transaction.amount || 0).toLocaleString('pt-BR')}
                       </td>

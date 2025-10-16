@@ -33,18 +33,18 @@ const EmployeeLimitWarning: React.FC<EmployeeLimitWarningProps> = ({
           <div>
             {isAtLimit ? (
               <>
-                <p className="font-semibold">Limite de funcionários atingido!</p>
-                <p className="text-sm">
+                <div className="font-semibold">Limite de funcionários atingido!</div>
+                <div className="text-sm flex items-center gap-2">
                   Você atingiu o limite de {limit} funcionário{limit > 1 ? 's' : ''} do plano{' '}
-                  <Badge variant="outline" className="capitalize ml-1">{currentPlan}</Badge>
-                </p>
+                  <Badge variant="outline" className="capitalize">{currentPlan}</Badge>
+                </div>
               </>
             ) : (
               <>
-                <p className="font-semibold">Limite de funcionários quase atingido</p>
-                <p className="text-sm">
+                <div className="font-semibold">Limite de funcionários quase atingido</div>
+                <div className="text-sm">
                   Você pode adicionar apenas mais {remaining} funcionário{remaining > 1 ? 's' : ''}
-                </p>
+                </div>
               </>
             )}
           </div>

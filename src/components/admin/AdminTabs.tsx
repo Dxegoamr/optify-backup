@@ -615,6 +615,27 @@ const AdminTabs = () => {
           </div>
         )}
 
+        {/* Gráfico de Vendas Mensais */}
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <BarChart3 className="h-5 w-5" />
+            Vendas Mensais
+          </h3>
+          <div className="h-64 flex items-center justify-center bg-muted/20 rounded-lg">
+            <div className="text-center">
+              <div className="w-32 h-32 mx-auto mb-4 bg-gradient-primary rounded-lg flex items-center justify-center">
+                <TrendingUp className="h-16 w-16 text-white" />
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Gráfico de vendas mensais será implementado aqui
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Mostrando vendas dos últimos 12 meses
+              </p>
+            </div>
+          </div>
+        </Card>
+
         {/* Gráficos e Análises */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {/* Gráfico de Receita por Mês */}

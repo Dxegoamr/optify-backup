@@ -114,7 +114,7 @@ const DayTransactionsModal = ({ date }: DayTransactionsModalProps) => {
         {/* Registrar Depósito */}
         <div className="space-y-4 p-4 border rounded-lg">
           <div className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-success" />
+            <TrendingUp className="h-5 w-5 text-destructive" />
             <h3 className="text-lg font-semibold">Registrar Depósito</h3>
           </div>
           
@@ -159,7 +159,7 @@ const DayTransactionsModal = ({ date }: DayTransactionsModalProps) => {
         {/* Registrar Saque */}
         <div className="space-y-4 p-4 border rounded-lg">
           <div className="flex items-center gap-2">
-            <TrendingDown className="h-5 w-5 text-destructive" />
+            <TrendingDown className="h-5 w-5 text-success" />
             <h3 className="text-lg font-semibold">Registrar Saque</h3>
           </div>
           
@@ -234,7 +234,7 @@ const DayTransactionsModal = ({ date }: DayTransactionsModalProps) => {
                 </div>
                 
                 <div className="flex items-center gap-2">
-                  <span className={`font-bold ${transaction.type === 'deposit' ? 'text-success' : 'text-destructive'}`}>
+                  <span className={`font-bold ${transaction.type === 'deposit' ? 'text-destructive' : 'text-success'}`}>
                     {transaction.type === 'deposit' ? '+' : '-'}R$ {Number(transaction.amount).toLocaleString('pt-BR')}
                   </span>
                   

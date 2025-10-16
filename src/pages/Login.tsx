@@ -11,8 +11,9 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
   const navigate = useNavigate();
-  const { signIn, user } = useFirebaseAuth();
+  const { signIn, user, resetPassword } = useFirebaseAuth();
 
   if (user) {
     navigate('/dashboard');
@@ -31,6 +32,29 @@ const Login = () => {
       toast.error('Erro ao fazer login. Tente novamente.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!email.trim()) {
+      toast.error('Digite seu e-mail para recuperar a senha');
+      return;
+    }
+
+    setResetLoading(true);
+    try {
+      await resetPassword(email);
+      toast.success('E-mail de recuperação enviado! Verifique sua caixa de entrada.');
+    } catch (error: any) {
+      if (error?.code === 'auth/user-not-found') {
+        toast.error('E-mail não encontrado. Verifique se o e-mail está correto.');
+      } else if (error?.code === 'auth/invalid-email') {
+        toast.error('E-mail inválido. Verifique o formato do e-mail.');
+      } else {
+        toast.error('Erro ao enviar e-mail de recuperação. Tente novamente.');
+      }
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -131,6 +155,25 @@ const Login = () => {
               'Entrar'
             )}
           </Button>
+
+          <div className="text-center">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={handleResetPassword}
+              disabled={resetLoading || !email.trim()}
+              className="text-sm text-muted-foreground hover:text-foreground"
+            >
+              {resetLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                  Enviando...
+                </>
+              ) : (
+                'Esqueci minha senha'
+              )}
+            </Button>
+          </div>
         </form>
 
         <div className="mt-6 text-center text-sm">

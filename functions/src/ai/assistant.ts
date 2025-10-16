@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import * as functions from 'firebase-functions';
 import OpenAI from 'openai';
 import { AI_TOOLS } from './tools';
 import {
@@ -9,23 +10,6 @@ import {
   executarConsultaSaldo,
   executarListaFuncionarios
 } from './executors';
-
-// Configuração da OpenAI API
-// A chave DEVE ser configurada via variável de ambiente ou Firebase Functions Config
-// Desenvolvimento: criar arquivo .env com OPENAI_API_KEY=sua-chave
-// Produção: firebase functions:config:set openai.key="sua-chave"
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || 
-  (typeof functions !== 'undefined' && (functions as any).config?.()?.openai?.key);
-
-if (!OPENAI_API_KEY) {
-  console.error('❌ OPENAI_API_KEY não configurada! Configure usando:');
-  console.error('   - Variável de ambiente: OPENAI_API_KEY=sua-chave');
-  console.error('   - Firebase config: firebase functions:config:set openai.key="sua-chave"');
-}
-
-const openai = new OpenAI({
-  apiKey: OPENAI_API_KEY || 'dummy-key-will-fail' // Vai falhar se não configurado
-});
 
 // System prompt otimizado - IA Geral + Especialista Optify
 const SYSTEM_PROMPT = `Você é um assistente virtual inteligente e versátil. Você pode:
@@ -162,6 +146,17 @@ export const generateAIResponse = onCall<GenerateResponseRequest>(
     try {
       console.log(`🤖 Gerando resposta para usuário: ${request.auth.uid}`);
 
+      // Inicializar OpenAI com a chave do config
+      const openaiApiKey = functions.config().openai?.key || process.env.OPENAI_API_KEY;
+      
+      if (!openaiApiKey) {
+        throw new HttpsError('internal', 'OpenAI API key não configurada');
+      }
+
+      const openai = new OpenAI({
+        apiKey: openaiApiKey
+      });
+
       // Preparar mensagens para o GPT
       const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
         { role: 'system', content: SYSTEM_PROMPT }
@@ -208,48 +203,50 @@ export const generateAIResponse = onCall<GenerateResponseRequest>(
 
         // Executar cada function call
         for (const toolCall of responseMessage.tool_calls) {
-          const functionName = toolCall.function.name;
-          const functionArgs = JSON.parse(toolCall.function.arguments);
+          if (toolCall.type === 'function') {
+            const functionName = toolCall.function.name;
+            const functionArgs = JSON.parse(toolCall.function.arguments);
 
-          console.log(`⚙️ Executando: ${functionName}`, functionArgs);
+            console.log(`⚙️ Executando: ${functionName}`, functionArgs);
 
-          let functionResult: any;
+            let functionResult: any;
 
-          // Executar a function apropriada
-          switch (functionName) {
-            case 'registrar_deposito':
-              functionResult = await executarRegistroDeposito(functionArgs, request.auth.uid);
-              break;
-            case 'registrar_saque':
-              functionResult = await executarRegistroSaque(functionArgs, request.auth.uid);
-              break;
-            case 'fechar_dia':
-              functionResult = await executarFechamentoDia(functionArgs, request.auth.uid);
-              break;
-            case 'registrar_despesa':
-              functionResult = await executarRegistroDespesa(functionArgs, request.auth.uid);
-              break;
-            case 'consultar_saldo':
-              functionResult = await executarConsultaSaldo(functionArgs, request.auth.uid);
-              break;
-            case 'listar_funcionarios':
-              functionResult = await executarListaFuncionarios(functionArgs, request.auth.uid);
-              break;
-            default:
-              functionResult = {
-                success: false,
-                message: `Function ${functionName} não implementada`
-              };
+            // Executar a function apropriada
+            switch (functionName) {
+              case 'registrar_deposito':
+                functionResult = await executarRegistroDeposito(functionArgs, request.auth.uid);
+                break;
+              case 'registrar_saque':
+                functionResult = await executarRegistroSaque(functionArgs, request.auth.uid);
+                break;
+              case 'fechar_dia':
+                functionResult = await executarFechamentoDia(functionArgs, request.auth.uid);
+                break;
+              case 'registrar_despesa':
+                functionResult = await executarRegistroDespesa(functionArgs, request.auth.uid);
+                break;
+              case 'consultar_saldo':
+                functionResult = await executarConsultaSaldo(functionArgs, request.auth.uid);
+                break;
+              case 'listar_funcionarios':
+                functionResult = await executarListaFuncionarios(functionArgs, request.auth.uid);
+                break;
+              default:
+                functionResult = {
+                  success: false,
+                  message: `Function ${functionName} não implementada`
+                };
+            }
+
+            console.log(`✅ Function ${functionName} executada:`, functionResult.success);
+
+            // Adicionar resultado da function às mensagens
+            messages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              content: JSON.stringify(functionResult)
+            } as any);
           }
-
-          console.log(`✅ Function ${functionName} executada:`, functionResult.success);
-
-          // Adicionar resultado da function às mensagens
-          messages.push({
-            role: 'tool',
-            tool_call_id: toolCall.id,
-            content: JSON.stringify(functionResult)
-          } as any);
         }
 
         // Fazer uma segunda chamada ao GPT para gerar resposta final

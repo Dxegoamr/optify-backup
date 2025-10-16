@@ -43,7 +43,6 @@ const Termos = lazy(() => import("./pages/Termos"));
 const Privacidade = lazy(() => import("./pages/Privacidade"));
 const Suporte = lazy(() => import("./pages/Suporte"));
 const PaymentResult = lazy(() => import("./pages/payment/PaymentResult"));
-const AIAssistantPage = lazy(() => import("./pages/AIAssistantPage"));
 
 const queryClient = new QueryClient();
 
@@ -88,7 +87,6 @@ const App = () => (
                 <Route path="/termos" element={<Termos />} />
                 <Route path="/privacidade" element={<Privacidade />} />
                 <Route path="/suporte" element={<Suporte />} />
-                <Route path="/assistente" element={<ProtectedRoute><AIAssistantPage /></ProtectedRoute>} />
                 
                 {/* Rotas de pagamento */}
                 <Route path="/payment/success" element={<ProtectedRoute><PaymentResult mode="success" /></ProtectedRoute>} />
