@@ -10,7 +10,7 @@ import {
 } from 'firebase/auth';
 import { auth } from '@/integrations/firebase/config';
 import { UserPlatformService } from '@/core/services/user-specific.service';
-import { checkUserIsAdmin } from '@/core/services/admin.service';
+import { checkUserIsAdmin, isAdminEmail } from '@/core/services/admin.service';
 import { UserProfileService } from '@/core/services/user-profile.service';
 import { getIdTokenResult } from 'firebase/auth';
 import { setSentryUser } from '@/observability/sentry';
@@ -52,7 +52,7 @@ export const FirebaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       
       // Debug: Log admin verification
       const isClaimsAdmin = claims.admin === true;
-      const isHardcodedAdmin = user.email === 'diegkamor@gmail.com';
+      const isHardcodedAdmin = isAdminEmail(user.email);
       const finalIsAdmin = isClaimsAdmin || isHardcodedAdmin;
       
       console.log('🔍 FirebaseAuth Admin Debug:', {
@@ -68,7 +68,7 @@ export const FirebaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     } catch (error) {
       console.error('Erro ao obter custom claims:', error);
       setCustomClaims(null);
-      setIsAdmin(user.email === 'diegkamor@gmail.com'); // fallback para superadmin
+      setIsAdmin(isAdminEmail(user.email)); // fallback para superadmin
       return null;
     }
   };
@@ -111,7 +111,7 @@ export const FirebaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
           
           // Fallback para superadmin em caso de erro
           setCustomClaims(null);
-          setIsAdmin(user.email === 'diegkamor@gmail.com');
+          setIsAdmin(isAdminEmail(user.email));
         }
       } else {
         setIsAdmin(false);

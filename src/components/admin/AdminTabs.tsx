@@ -11,6 +11,7 @@ import { StatCard } from '@/components/ui/stat-card';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
 import { useAdminData } from '@/hooks/useAdminData';
 import { getAllUsers as getAdminUsers, AdminUser } from '@/core/services/admin-data.service';
+import { isAdminEmail } from '@/core/services/admin.service';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { 
@@ -122,10 +123,9 @@ const AdminTabs = () => {
   const canDeleteUserSync = (targetUserId: string): boolean => {
     if (!currentUser) return false;
     
-    const isAdmin = currentUser.claims?.admin === true;
-    const isSuperAdmin = currentUser.email && ['diegkamor@gmail.com'].includes(currentUser.email);
+    const isSuperAdmin = currentUser.email && isAdminEmail(currentUser.email);
     
-    if (!isAdmin && !isSuperAdmin) return false;
+    if (!isSuperAdmin) return false;
     if (targetUserId === currentUser.uid) return false;
     
     return true;

@@ -4,6 +4,7 @@ import { db } from '@/integrations/firebase/config';
 // Lista de emails de administradores
 const ADMIN_EMAILS = [
   'diegkamor@gmail.com',
+  'theohideki@gmail.com', // Theo - Admin
   // Adicione mais emails de admin aqui conforme necessário
 ];
 

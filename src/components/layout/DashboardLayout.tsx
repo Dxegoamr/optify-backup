@@ -5,6 +5,7 @@ import { usePlanLimitations } from '@/hooks/usePlanLimitations';
 import { useMobile } from '@/hooks/useMobile';
 import { usePreload } from '@/hooks/usePreload';
 import { AIAssistant } from '@/components/ai-assistant/AIAssistant';
+import { isAdminEmail } from '@/core/services/admin.service';
 import { 
   LayoutDashboard, 
   Users, 
@@ -100,7 +101,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     { icon: Calendar, label: 'Histórico', path: '/historico', requiredFeature: 'history' },
     { icon: Crown, label: 'Planos', path: '/planos', requiredFeature: 'dashboard' },
     // Afiliados - apenas para administradores (em fase de construção)
-    ...((isAdmin || user?.email === 'diegkamor@gmail.com') ? [{ icon: Gift, label: 'Afiliados', path: '/afiliados', requiredFeature: 'dashboard' }] : []),
+    ...((isAdmin || isAdminEmail(user?.email)) ? [{ icon: Gift, label: 'Afiliados', path: '/afiliados', requiredFeature: 'dashboard' }] : []),
   ].filter(item => {
     return canAccess(item.requiredFeature as any);
   });
@@ -109,14 +110,14 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   console.log('🔍 Admin Debug:', {
     isAdmin,
     userEmail: user?.email,
-    isAdminEmail: user?.email === 'diegkamor@gmail.com',
-    hasAdminAccess: isAdmin || user?.email === 'diegkamor@gmail.com'
+    isAdminEmail: isAdminEmail(user?.email),
+    hasAdminAccess: isAdmin || isAdminEmail(user?.email)
   });
 
   // FORÇAR ADMIN TEMPORARIAMENTE PARA DEBUG
   const forceAdmin = true; // Temporário para debug
   
-  const adminItem = (isAdmin || user?.email === 'diegkamor@gmail.com' || forceAdmin) ? [{ icon: Shield, label: 'Admin', path: '/admin', requiredFeature: 'advancedPanel' }] : [];
+  const adminItem = (isAdmin || isAdminEmail(user?.email) || forceAdmin) ? [{ icon: Shield, label: 'Admin', path: '/admin', requiredFeature: 'advancedPanel' }] : [];
   
   const bottomNavItems = [
     { icon: UserCircle, label: 'Perfil', path: '/perfil' },

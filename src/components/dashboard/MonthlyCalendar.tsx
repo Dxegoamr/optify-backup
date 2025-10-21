@@ -147,19 +147,6 @@ const MonthlyCalendar = () => {
             {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
           </h3>
           <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                console.log('=== DEBUG INFO ===');
-                console.log('User ID:', user?.uid);
-                console.log('Historical Summaries:', historicalSummaries);
-                console.log('All Transactions:', allTransactions);
-                console.log('Daily Profits Map:', Array.from(dailyProfits.entries()));
-                console.log('==================');
-              }}
-            >
-              Debug
-            </Button>
             <Button variant="outline" size="icon" onClick={previousMonth}>
               <ChevronLeft className="h-4 w-4" />
             </Button>

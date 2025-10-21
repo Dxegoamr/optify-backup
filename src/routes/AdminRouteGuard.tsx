@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { AlertTriangle, Shield, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
+import { isAdminEmail } from '@/core/services/admin.service';
 
 interface AdminRouteGuardProps {
   children: ReactNode;
@@ -13,6 +14,7 @@ interface AdminRouteGuardProps {
 // Lista de superadmins (mesma do backend)
 const SUPER_ADMINS = [
   'diegkamor@gmail.com',
+  'theohideki@gmail.com', // Theo - Admin
   // Adicionar outros superadmins aqui
 ];
 
@@ -38,7 +40,7 @@ export const AdminRouteGuard = ({ children, fallback }: AdminRouteGuardProps) =>
         const claims = idTokenResult.claims;
         
         const isAdmin = claims.admin === true;
-        const isSuperAdmin = SUPER_ADMINS.includes(user.email || '');
+        const isSuperAdmin = isAdminEmail(user.email);
 
         console.log('Verificação de admin:', {
           uid: user.uid,
@@ -145,7 +147,7 @@ export const AdminRouteGuard = ({ children, fallback }: AdminRouteGuardProps) =>
   }
 
   // Verificar se é admin ou superadmin
-  const isUserAdmin = isAdmin || SUPER_ADMINS.includes(user?.email || '');
+  const isUserAdmin = isAdmin || isAdminEmail(user?.email);
   
   // Não é admin
   if (!isUserAdmin) {

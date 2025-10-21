@@ -43,6 +43,7 @@ const Termos = lazy(() => import("./pages/Termos"));
 const Privacidade = lazy(() => import("./pages/Privacidade"));
 const Suporte = lazy(() => import("./pages/Suporte"));
 const PaymentResult = lazy(() => import("./pages/payment/PaymentResult"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 
 const queryClient = new QueryClient();
 
@@ -59,6 +60,7 @@ const App = () => (
                 <Route path="/" element={<Home />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/signup" element={<Signup />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/basic-info" element={<BasicInfo />} />
                 <Route path="/initial-setup" element={<InitialSetup />} />
                 
