@@ -1,4 +1,4 @@
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onCall, HttpsError, onRequest } from 'firebase-functions/v2/https';
 import * as functions from 'firebase-functions';
 import OpenAI from 'openai';
 import { AI_TOOLS } from './tools';
@@ -10,6 +10,7 @@ import {
   executarConsultaSaldo,
   executarListaFuncionarios
 } from './executors';
+import * as cors from 'cors';
 
 // System prompt otimizado - IA Geral + Especialista Optify
 const SYSTEM_PROMPT = `Você é um assistente virtual inteligente e versátil. Você pode:
@@ -287,7 +288,208 @@ export const generateAIResponse = onCall<GenerateResponseRequest>(
         throw new HttpsError('internal', 'Erro de autenticação com OpenAI API');
       }
 
-      throw new HttpsError('internal', 'Erro ao gerar resposta do assistente');
+    }
+  }
+);
+
+/**
+ * Cloud Function HTTP para gerar respostas do assistente AI (com CORS)
+ */
+export const generateAIResponseHTTP = onRequest(
+  {
+    cors: {
+      origin: [
+        'https://optify.host',
+        'https://optify-definitivo.web.app',
+        'https://optify-definitivo.firebaseapp.com',
+        'http://localhost:8080',
+        'http://localhost:8081'
+      ],
+      methods: ['GET', 'POST', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization']
+    },
+    memory: '256MiB',
+    timeoutSeconds: 60,
+    region: 'us-central1',
+  },
+  async (request, response) => {
+    // Verificar método
+    if (request.method === 'OPTIONS') {
+      response.status(200).send('');
+      return;
+    }
+
+    if (request.method !== 'POST') {
+      response.status(405).send('Method not allowed');
+      return;
+    }
+
+    // Verificar autenticação via header
+    const authHeader = request.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      response.status(401).json({ error: 'Usuário não autenticado' });
+      return;
+    }
+
+    try {
+      const { message, context } = request.body;
+
+      // Validações
+      if (!message || typeof message !== 'string') {
+        response.status(400).json({ error: 'Mensagem inválida' });
+        return;
+      }
+
+      if (message.length > 1000) {
+        response.status(400).json({ error: 'Mensagem muito longa (máximo 1000 caracteres)' });
+        return;
+      }
+
+      console.log(`🤖 Gerando resposta HTTP para usuário autenticado`);
+
+      // Inicializar OpenAI com a chave do config
+      const openaiApiKey = functions.config().openai?.key || process.env.OPENAI_API_KEY;
+      
+      if (!openaiApiKey) {
+        response.status(500).json({ error: 'OpenAI API key não configurada' });
+        return;
+      }
+
+      const openai = new OpenAI({
+        apiKey: openaiApiKey
+      });
+
+      // Preparar mensagens para o GPT
+      const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+        { role: 'system', content: SYSTEM_PROMPT }
+      ];
+
+      // Adicionar contexto (últimas 5 mensagens)
+      if (context && Array.isArray(context)) {
+        const recentContext = context.slice(-5);
+        for (const msg of recentContext) {
+          if (msg.role === 'user' || msg.role === 'assistant') {
+            messages.push({
+              role: msg.role,
+              content: msg.content
+            });
+          }
+        }
+      }
+
+      // Adicionar mensagem atual do usuário
+      messages.push({
+        role: 'user',
+        content: message
+      });
+
+      // Chamar OpenAI API com GPT-4o mini e tools
+      let completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: messages,
+        tools: AI_TOOLS as any,
+        tool_choice: 'auto', // Deixar o modelo decidir quando usar tools
+        temperature: 0.7,
+        max_tokens: 500,
+      });
+
+      let responseMessage = completion.choices[0]?.message;
+      
+      // Se o modelo decidiu chamar uma function
+      if (responseMessage?.tool_calls && responseMessage.tool_calls.length > 0) {
+        console.log(`🔧 GPT decidiu chamar ${responseMessage.tool_calls.length} function(s)`);
+        
+        // Adicionar a resposta do assistente às mensagens
+        messages.push(responseMessage as any);
+
+        // Executar cada function call
+        for (const toolCall of responseMessage.tool_calls) {
+          if (toolCall.type === 'function') {
+            const functionName = toolCall.function.name;
+            const functionArgs = JSON.parse(toolCall.function.arguments);
+
+            console.log(`⚙️ Executando: ${functionName}`, functionArgs);
+
+            let functionResult: any;
+
+            // Executar a function apropriada
+            switch (functionName) {
+              case 'registrar_deposito':
+                functionResult = await executarRegistroDeposito(functionArgs, 'http-user');
+                break;
+              case 'registrar_saque':
+                functionResult = await executarRegistroSaque(functionArgs, 'http-user');
+                break;
+              case 'fechar_dia':
+                functionResult = await executarFechamentoDia(functionArgs, 'http-user');
+                break;
+              case 'registrar_despesa':
+                functionResult = await executarRegistroDespesa(functionArgs, 'http-user');
+                break;
+              case 'consultar_saldo':
+                functionResult = await executarConsultaSaldo(functionArgs, 'http-user');
+                break;
+              case 'listar_funcionarios':
+                functionResult = await executarListaFuncionarios(functionArgs, 'http-user');
+                break;
+              default:
+                functionResult = {
+                  success: false,
+                  message: `Function ${functionName} não implementada`
+                };
+            }
+
+            console.log(`✅ Function ${functionName} executada:`, functionResult.success);
+
+            // Adicionar resultado da function às mensagens
+            messages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              content: JSON.stringify(functionResult)
+            } as any);
+          }
+        }
+
+        // Fazer uma segunda chamada ao GPT para gerar resposta final
+        completion = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: messages,
+          temperature: 0.7,
+          max_tokens: 500,
+        });
+
+        responseMessage = completion.choices[0]?.message;
+      }
+
+      const responseText = responseMessage?.content || 'Desculpe, não consegui gerar uma resposta.';
+
+      console.log(`✅ Resposta HTTP gerada com sucesso`);
+
+      response.status(200).json({
+        response: responseText.trim(),
+        model: 'gpt-4o-mini',
+        usage: {
+          promptTokens: completion.usage?.prompt_tokens || 0,
+          completionTokens: completion.usage?.completion_tokens || 0,
+          totalTokens: completion.usage?.total_tokens || 0,
+        }
+      });
+
+    } catch (error: any) {
+      console.error('❌ Erro ao gerar resposta HTTP:', error);
+
+      // Tratamento de erros específicos da OpenAI
+      if (error.status === 429) {
+        response.status(429).json({ error: 'Limite de requisições excedido. Tente novamente em alguns instantes.' });
+        return;
+      }
+
+      if (error.status === 401) {
+        response.status(500).json({ error: 'Erro de autenticação com OpenAI API' });
+        return;
+      }
+
+      response.status(500).json({ error: 'Erro ao gerar resposta do assistente' });
     }
   }
 );

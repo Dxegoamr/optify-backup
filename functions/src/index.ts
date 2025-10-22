@@ -50,4 +50,4 @@ export {
 export { exportUserData, cleanupOldExports } from './lgpd/export-user-data';
 
 // Export AI Assistant functions
-export { generateAIResponse } from './ai/assistant';
+export { generateAIResponse, generateAIResponseHTTP } from './ai/assistant';

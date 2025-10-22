@@ -261,43 +261,55 @@ class AIAssistantService {
   }
 
   /**
-   * Gera resposta usando GPT-4o Mini via Cloud Function ou fallback local
+   * Gera resposta usando GPT-4o Mini via Cloud Function HTTP ou fallback local
    */
   private async generateResponseWithGPT(userMessage: string, context: ChatMessage[]): Promise<string> {
     try {
-      // Chamar Cloud Function que usa GPT-4o mini
-      const generateAIResponse = httpsCallable(functions, 'generateAIResponse');
-      
-      const result = await generateAIResponse({
-        message: userMessage,
-        context: context.slice(-5).map(msg => ({
-          role: msg.role,
-          content: msg.content
-        }))
+      // Tentar usar a função HTTP primeiro (com CORS configurado)
+      const response = await fetch('https://us-central1-optify-definitivo.cloudfunctions.net/generateAIResponseHTTP', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${await this.getAuthToken()}`
+        },
+        body: JSON.stringify({
+          message: userMessage,
+          context: context.slice(-5).map(msg => ({
+            role: msg.role,
+            content: msg.content
+          }))
+        })
       });
 
-      const data = result.data as { response: string; model: string; usage: any };
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
       
       console.log(`✅ Resposta gerada com ${data.model} - Tokens: ${data.usage?.totalTokens || 0}`);
       
       return data.response;
 
     } catch (error: any) {
-      console.error('Erro ao chamar Cloud Function:', error);
-      
-      // Se o erro for de autenticação ou rate limit, mostrar mensagem específica
-      if (error.code === 'resource-exhausted') {
-        return 'Desculpe, o limite de requisições foi excedido. Tente novamente em alguns instantes.';
-      }
-      
-      if (error.code === 'unauthenticated') {
-        return 'Erro de autenticação. Por favor, faça login novamente.';
-      }
+      console.error('Erro ao chamar Cloud Function HTTP:', error);
       
       // Fallback para resposta local em caso de erro
       console.log('📝 Usando resposta local como fallback');
       return this.generateLocalResponse(userMessage, context);
     }
+  }
+
+  /**
+   * Obtém token de autenticação do Firebase
+   */
+  private async getAuthToken(): Promise<string> {
+    const { auth } = await import('@/integrations/firebase/config');
+    const user = auth.currentUser;
+    if (!user) {
+      throw new Error('Usuário não autenticado');
+    }
+    return await user.getIdToken();
   }
 
   /**
