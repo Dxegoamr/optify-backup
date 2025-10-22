@@ -185,12 +185,6 @@ const Login = () => {
             Cadastre-se
           </button>
         </div>
-
-        <div className="mt-4 p-4 bg-muted/50 rounded-lg text-xs text-muted-foreground">
-          <p className="font-semibold mb-1">Teste com:</p>
-          <p>Email: admin@optify.com</p>
-          <p>Senha: qualquer senha</p>
-        </div>
       </div>
     </div>
   );
