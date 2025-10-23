@@ -53,7 +53,7 @@ const getAvailablePlans = () => {
       id: 'standard', 
       name: 'Standard', 
       description: 'Plano intermediário com mais recursos',
-      price: 1.00,
+      price: 34.90,
       features: ['Todas as funcionalidades Free', 'Relatórios avançados', 'Suporte prioritário']
     },
     { 
@@ -67,7 +67,7 @@ const getAvailablePlans = () => {
       id: 'ultimate', 
       name: 'Ultimate', 
       description: 'Plano premium com todos os recursos',
-      price: 99.90,
+      price: 74.90,
       features: ['Todas as funcionalidades', 'Suporte 24/7', 'Consultoria personalizada']
     }
   ];

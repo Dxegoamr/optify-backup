@@ -123,7 +123,7 @@ const Home = () => {
     },
     {
       name: 'Standard',
-      price: 1,
+      price: 34.90,
       period: '/mês',
       badge: undefined,
       icon: Shield,
@@ -140,7 +140,7 @@ const Home = () => {
       name: 'Medium',
       price: 49.90,
       period: '/mês',
-      badge: 'Mais popular',
+      badge: 'Recomendado',
       icon: Zap,
       highlight: true,
       features: [
@@ -154,9 +154,9 @@ const Home = () => {
     },
     {
       name: 'Ultimate',
-      price: 99.90,
+      price: 74.90,
       period: '/mês',
-      badge: 'Para equipes',
+      badge: 'Em breve',
       icon: Crown,
       highlight: false,
       features: [
@@ -273,7 +273,7 @@ const Home = () => {
             <div className="flex items-center justify-center gap-2 text-sm">
               <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
               <span className="text-muted-foreground">
-                <span className="text-primary font-semibold">7 dias grátis</span> com o plano Ultimate
+                <span className="text-primary font-semibold">7 dias grátis</span> com o plano Medium
               </span>
               <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
             </div>
@@ -345,7 +345,7 @@ const Home = () => {
             </div>
             
             <h3 className="text-2xl md:text-3xl font-bold mb-4">
-              <span className="text-primary">7 dias grátis</span> com o plano Ultimate
+              <span className="text-primary">7 dias grátis</span> com o plano Medium
             </h3>
             
             <p className="text-lg text-muted-foreground mb-6 max-w-2xl mx-auto">

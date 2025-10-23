@@ -152,9 +152,9 @@ const Planos = () => {
     {
       name: 'Standard',
       value: 'standard',
-      price: 1.00,
+      price: 34.90,
       period: 'mês',
-      annualPrice: 10.20,
+      annualPrice: 356.76,
       features: planFeatures.standard,
       current: currentPlan === 'standard',
       popular: false,
@@ -174,9 +174,9 @@ const Planos = () => {
     {
       name: 'Ultimate',
       value: 'ultimate',
-      price: 99.90,
+      price: 74.90,
       period: 'mês',
-      annualPrice: 1.00, // Preço de teste
+      annualPrice: 764.76,
       features: planFeatures.ultimate,
       current: currentPlan === 'ultimate',
       popular: false,

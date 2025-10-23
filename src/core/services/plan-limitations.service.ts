@@ -132,8 +132,8 @@ export const PLAN_INFO: PlanInfo[] = [
     id: 'standard',
     name: 'Standard',
     description: 'Ideal para pequenos negócios',
-    monthlyPrice: 1.00,
-    annualPrice: 10.20,
+    monthlyPrice: 34.90,
+    annualPrice: 356.76,
     annualDiscount: 15,
     maxEmployees: 5
   },
@@ -151,8 +151,8 @@ export const PLAN_INFO: PlanInfo[] = [
     id: 'ultimate',
     name: 'Ultimate',
     description: 'Acesso total com recursos avançados',
-    monthlyPrice: 99.90,
-    annualPrice: 1018.32,
+    monthlyPrice: 74.90,
+    annualPrice: 764.76,
     annualDiscount: 15,
     maxEmployees: 50
   }
