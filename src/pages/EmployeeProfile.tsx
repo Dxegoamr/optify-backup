@@ -505,12 +505,12 @@ const EmployeeProfile = () => {
                         <Badge variant={transaction.type === 'deposit' ? 'destructive' : 'default'}>
                           {transaction.type === 'deposit' ? (
                             <div className="flex items-center gap-1">
-                              <TrendingDown className="h-3 w-3" />
+                              <TrendingUp className="h-3 w-3" />
                               Despesa
                             </div>
                           ) : (
                             <div className="flex items-center gap-1">
-                              <TrendingUp className="h-3 w-3" />
+                              <TrendingDown className="h-3 w-3" />
                               Receita
                             </div>
                           )}

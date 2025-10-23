@@ -464,7 +464,7 @@ const GestaoFuncionarios = () => {
                 <p className="text-3xl font-bold text-foreground">R$ {totalDeposits.toLocaleString('pt-BR')}</p>
               </div>
               <div className="p-3 bg-gradient-primary rounded-xl shadow-glow">
-                <ArrowUpCircle className="h-6 w-6 text-primary-foreground" />
+                <ArrowDownCircle className="h-6 w-6 text-primary-foreground" />
               </div>
             </div>
           </Card>
@@ -479,7 +479,7 @@ const GestaoFuncionarios = () => {
                 <p className="text-3xl font-bold text-foreground">R$ {totalWithdraws.toLocaleString('pt-BR')}</p>
               </div>
               <div className="p-3 bg-gradient-primary rounded-xl shadow-glow">
-                <ArrowDownCircle className="h-6 w-6 text-primary-foreground" />
+                <ArrowUpCircle className="h-6 w-6 text-primary-foreground" />
               </div>
             </div>
           </Card>

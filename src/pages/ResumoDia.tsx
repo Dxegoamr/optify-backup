@@ -6,12 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { TrendingUp, TrendingDown, Calendar as CalendarIcon, ArrowUp, ArrowDown, Target, Trophy, Lock, Filter, X } from 'lucide-react';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
-import { usePlanLimitations } from '@/hooks/usePlanLimitations';
 import { useEmployees, useTransactions, usePlatforms, useDeleteTransaction } from '@/hooks/useFirestore';
-import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { getCurrentDateInSaoPaulo, formatDateInSaoPaulo, getCurrentDateStringInSaoPaulo } from '@/utils/timezone';
 import { UserDailySummaryService } from '@/core/services/user-specific.service';
-import { UserConfigService } from '@/core/services/user-config.service';
 import { toast } from 'sonner';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -23,7 +21,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 const ResumoDia = () => {
   const { user } = useFirebaseAuth();
-  const { getAllowedEmployees } = usePlanLimitations();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -50,23 +47,10 @@ const ResumoDia = () => {
   }, [searchParams]);
   
   // Buscar dados do Firebase
-  const { data: allEmployees = [] } = useEmployees(user?.uid || '');
+  const { data: employees = [] } = useEmployees(user?.uid || '');
   const { data: platforms = [] } = usePlatforms(user?.uid || '');
   const { data: allTransactions = [] } = useTransactions(user?.uid || '');
   const deleteTransactionMutation = useDeleteTransaction();
-  
-  // Filtrar funcionários baseado no plano
-  const employees = getAllowedEmployees(allEmployees);
-  
-  // Buscar configuração do usuário (meta mensal)
-  const { data: userConfig } = useQuery({
-    queryKey: ['user-config', user?.uid],
-    queryFn: async () => {
-      if (!user?.uid) return null;
-      return UserConfigService.getUserConfig(user.uid);
-    },
-    enabled: !!user?.uid
-  });
   
   // Filtrar transações do dia selecionado
   const todayTransactions = allTransactions.filter((transaction: any) => {
@@ -145,24 +129,6 @@ const ResumoDia = () => {
   console.log('- totalWithdraws:', totalWithdraws);
   console.log('- profit:', profit);
   console.log('- transactionCount:', transactionCount);
-
-  // Calcular metas diárias baseadas na meta mensal
-  const monthlyGoal = userConfig?.monthlyGoal || 10000; // Meta padrão de R$ 10.000
-  const currentDate = new Date();
-  const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
-  const dayOfMonth = currentDate.getDate();
-  const remainingDays = daysInMonth - dayOfMonth + 1; // +1 para incluir o dia atual
-  
-  // Calcular meta diária (arredondar para cima se necessário)
-  const dailyRevenueGoal = Math.ceil(monthlyGoal / daysInMonth);
-  const dailyTransactionGoal = Math.ceil(5); // Meta padrão de 5 transações por dia
-  
-  // Calcular quanto falta para atingir as metas
-  const remainingRevenueGoal = Math.max(0, dailyRevenueGoal - profit);
-  const remainingTransactionGoal = Math.max(0, dailyTransactionGoal - transactionCount);
-  
-  // Calcular progresso mensal
-  const monthlyProgress = Math.min(100, Math.max(0, (profit / monthlyGoal) * 100));
 
   // Calcular estatísticas por plataforma
   const platformStats = platforms.map((platform: any) => {
@@ -562,240 +528,537 @@ const ResumoDia = () => {
           </Card>
         </div>
 
-        {/* Layout principal: 2 colunas esquerda + 1 coluna direita */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Coluna esquerda - 2 colunas */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Melhor Plataforma */}
-            {bestPlatform && (
-              <Card className="p-6 shadow-card">
-                <div className="flex items-center gap-3 mb-4">
-                  <Trophy className="h-6 w-6 text-yellow-500" />
-                  <h3 className="text-lg font-semibold">Melhor Plataforma do Dia</h3>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div 
-                      className="w-4 h-4 rounded" 
-                      style={{ backgroundColor: bestPlatform.color }}
-                    />
-                    <span className="font-medium">{bestPlatform.name}</span>
-                  </div>
-                  <p className="text-2xl font-bold text-success">
-                    R$ {bestPlatform.profit.toLocaleString('pt-BR')}
-                  </p>
-                  <div className="text-sm text-muted-foreground">
-                    {bestPlatform.transactions} transações • 
-                    R$ {bestPlatform.deposits.toLocaleString('pt-BR')} depósitos • 
-                    R$ {bestPlatform.withdraws.toLocaleString('pt-BR')} saques
-                  </div>
-                </div>
-              </Card>
-            )}
-
-            {/* Melhor Funcionário */}
-            {bestEmployee && (
-              <Card className="p-6 shadow-card">
-                <div className="flex items-center gap-3 mb-4">
-                  <Trophy className="h-6 w-6 text-yellow-500" />
-                  <h3 className="text-lg font-semibold">Melhor Funcionário do Dia</h3>
-                </div>
-                <div className="space-y-3">
-                  <p className="font-medium">{bestEmployee.name}</p>
-                  <p className="text-2xl font-bold text-success">
-                    R$ {bestEmployee.profit.toLocaleString('pt-BR')}
-                  </p>
-                  <div className="text-sm text-muted-foreground">
-                    {bestEmployee.transactions} transações • 
-                    R$ {bestEmployee.deposits.toLocaleString('pt-BR')} depósitos • 
-                    R$ {bestEmployee.withdraws.toLocaleString('pt-BR')} saques
-                  </div>
-                </div>
-              </Card>
-            )}
-
-            {/* Performance por Funcionário */}
-            {barData.length > 0 && (
-              <Card className="p-6 shadow-card">
-                <h3 className="text-lg font-semibold mb-6">Performance por Funcionário</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={barData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" />
-                    <YAxis stroke="hsl(var(--muted-foreground))" />
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: 'hsl(var(--card))', 
-                        border: '1px solid hsl(var(--border))',
-                        borderRadius: '8px'
-                      }}
-                    />
-                    <Bar dataKey="receita" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Card>
-            )}
-          </div>
-
-          {/* Coluna direita - 1 coluna */}
-          <div className="space-y-6">
-            {/* Metas do Dia */}
+        {/* Melhor Plataforma e Funcionário */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {bestPlatform && (
             <Card className="p-6 shadow-card">
               <div className="flex items-center gap-3 mb-4">
                 <Trophy className="h-6 w-6 text-yellow-500" />
-                <h3 className="text-lg font-semibold">Metas do Dia</h3>
+                <h3 className="text-lg font-semibold">Melhor Plataforma do Dia</h3>
               </div>
-              <div className="space-y-4">
-                <div className="p-3 bg-muted/30 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-muted-foreground">Meta Diária de Receita</span>
-                    <span className="text-xs text-muted-foreground">R$ {dailyRevenueGoal.toLocaleString('pt-BR')}</span>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Hoje: R$ {profit.toLocaleString('pt-BR')}</span>
-                      <span className={remainingRevenueGoal > 0 ? 'text-destructive' : 'text-success'}>
-                        {remainingRevenueGoal > 0 ? `Faltam R$ ${remainingRevenueGoal.toLocaleString('pt-BR')}` : '🎯 Meta atingida!'}
-                      </span>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      Meta mensal: R$ {monthlyGoal.toLocaleString('pt-BR')} • Progresso: {monthlyProgress.toFixed(1)}%
-                    </div>
-                  </div>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div 
+                    className="w-4 h-4 rounded" 
+                    style={{ backgroundColor: bestPlatform.color }}
+                  />
+                  <span className="font-medium">{bestPlatform.name}</span>
                 </div>
-                
-                
-                <div className="p-3 bg-muted/30 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-muted-foreground">Status do Dia</span>
-                    <span className="text-xs text-muted-foreground">Resumo</span>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="text-sm">
-                      <span className="text-muted-foreground">Depósitos: </span>
-                      <span className="text-destructive">R$ {totalDeposits.toLocaleString('pt-BR')}</span>
-                    </div>
-                    <div className="text-sm">
-                      <span className="text-muted-foreground">Saques: </span>
-                      <span className="text-success">R$ {totalWithdraws.toLocaleString('pt-BR')}</span>
-                    </div>
-                    <div className="text-sm font-semibold">
-                      <span className="text-muted-foreground">Lucro: </span>
-                      <span className={profit >= 0 ? 'text-success' : 'text-destructive'}>
-                        R$ {profit.toLocaleString('pt-BR')}
-                      </span>
-                    </div>
-                  </div>
+                <p className="text-2xl font-bold text-success">
+                  R$ {bestPlatform.profit.toLocaleString('pt-BR')}
+                </p>
+                <div className="text-sm text-muted-foreground">
+                  {bestPlatform.transactions} transações • 
+                  R$ {bestPlatform.deposits.toLocaleString('pt-BR')} depósitos • 
+                  R$ {bestPlatform.withdraws.toLocaleString('pt-BR')} saques
                 </div>
               </div>
             </Card>
+          )}
 
-            {/* Gráfico de Pizza - Plataformas */}
-            {pieData.length > 0 && (
-              <Card className="p-6 shadow-card">
-                <h3 className="text-lg font-semibold mb-6">Receita por Plataforma</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={80}
-                      dataKey="value"
-                      label={({ name, value }) => `${name}: R$ ${value.toLocaleString('pt-BR')}`}
-                    >
-                      {pieData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                      formatter={(value: number) => [`R$ ${value.toLocaleString('pt-BR')}`, 'Receita']}
-                      contentStyle={{ 
-                        backgroundColor: 'hsl(var(--card))', 
-                        border: '1px solid hsl(var(--border))',
-                        borderRadius: '8px'
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </Card>
-            )}
-          </div>
+          {bestEmployee && (
+            <Card className="p-6 shadow-card">
+              <div className="flex items-center gap-3 mb-4">
+                <Trophy className="h-6 w-6 text-yellow-500" />
+                <h3 className="text-lg font-semibold">Melhor Funcionário do Dia</h3>
+              </div>
+              <div className="space-y-3">
+                <p className="font-medium">{bestEmployee.name}</p>
+                <p className="text-2xl font-bold text-success">
+                  R$ {bestEmployee.profit.toLocaleString('pt-BR')}
+                </p>
+                <div className="text-sm text-muted-foreground">
+                  {bestEmployee.transactions} transações • 
+                  R$ {bestEmployee.deposits.toLocaleString('pt-BR')} depósitos • 
+                  R$ {bestEmployee.withdraws.toLocaleString('pt-BR')} saques
+                </div>
+              </div>
+            </Card>
+          )}
         </div>
 
-        {/* Seções Adicionais */}
+        {/* Gráficos */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Estatísticas Comparativas */}
+          {/* Gráfico de Pizza - Plataformas */}
+          {pieData.length > 0 && (
+            <Card className="p-6 shadow-card">
+              <h3 className="text-lg font-semibold mb-6">Receita por Plataforma</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={80}
+                    dataKey="value"
+                    label={({ name, value }) => `${name}: R$ ${value.toLocaleString('pt-BR')}`}
+                  >
+                    {pieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    formatter={(value: number) => [`R$ ${value.toLocaleString('pt-BR')}`, 'Receita']}
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--card))', 
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px'
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </Card>
+          )}
+
+          {/* Gráfico de Barras - Funcionários */}
+          {barData.length > 0 && (
+            <Card className="p-6 shadow-card">
+              <h3 className="text-lg font-semibold mb-6">Performance por Funcionário</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={barData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" />
+                  <YAxis stroke="hsl(var(--muted-foreground))" />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--card))', 
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px'
+                    }}
+                  />
+                  <Bar dataKey="receita" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </Card>
+          )}
+        </div>
+
+        {/* Seções Adicionais para preencher espaço */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Resumo de Horários */}
           <Card className="p-6 shadow-card">
             <div className="flex items-center gap-3 mb-4">
-              <TrendingUp className="h-6 w-6 text-primary" />
-              <h3 className="text-lg font-semibold">Comparativo Semanal</h3>
+              <CalendarIcon className="h-6 w-6 text-primary" />
+              <h3 className="text-lg font-semibold">Atividade por Horário</h3>
             </div>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
-                <span className="text-sm text-muted-foreground">Média de transações/dia</span>
-                <span className="font-semibold">{Math.round(transactionCount / 7)}</span>
-              </div>
-              <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
-                <span className="text-sm text-muted-foreground">Ticket médio</span>
-                <span className="font-semibold">
-                  R$ {transactionCount > 0 ? Math.round((totalDeposits + totalWithdraws) / transactionCount).toLocaleString('pt-BR') : '0'}
-                </span>
-              </div>
-              <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
-                <span className="text-sm text-muted-foreground">Taxa de conversão</span>
-                <span className="font-semibold">
-                  {totalDeposits > 0 ? Math.round((totalWithdraws / totalDeposits) * 100) : 0}%
-                </span>
-              </div>
+            <div className="space-y-3">
+              {(() => {
+                const hourlyStats = todayTransactions.reduce((acc: any, transaction: any) => {
+                  const hour = new Date(transaction.createdAt?.toDate?.() || transaction.createdAt).getHours();
+                  if (!acc[hour]) {
+                    acc[hour] = { transactions: 0, amount: 0 };
+                  }
+                  acc[hour].transactions++;
+                  acc[hour].amount += Number(transaction.amount || 0);
+                  return acc;
+                }, {});
+
+                const sortedHours = Object.entries(hourlyStats)
+                  .sort(([,a], [,b]: any) => b.transactions - a.transactions)
+                  .slice(0, 3);
+
+                return sortedHours.length > 0 ? (
+                  sortedHours.map(([hour, stats]: any) => (
+                    <div key={hour} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                      <div>
+                        <p className="font-medium">{hour}:00h</p>
+                        <p className="text-sm text-muted-foreground">{stats.transactions} transação(ões)</p>
+                      </div>
+                      <p className="font-bold text-primary">
+                        R$ {stats.amount.toLocaleString('pt-BR')}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-muted-foreground text-center py-4">Nenhuma transação registrada hoje</p>
+                );
+              })()}
             </div>
           </Card>
 
-          {/* Insights e Recomendações */}
+          {/* Estatísticas Rápidas */}
           <Card className="p-6 shadow-card">
             <div className="flex items-center gap-3 mb-4">
               <Target className="h-6 w-6 text-primary" />
-              <h3 className="text-lg font-semibold">Insights do Dia</h3>
+              <h3 className="text-lg font-semibold">Estatísticas Rápidas</h3>
+            </div>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-3 bg-success/10 rounded-lg border border-success/20">
+                <div>
+                  <p className="text-sm text-muted-foreground">Ticket Médio</p>
+                  <p className="text-lg font-bold text-success">
+                    R$ {transactionCount > 0 ? (totalWithdraws / transactionCount).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00'}
+                  </p>
+                </div>
+                <TrendingUp className="h-8 w-8 text-success/60" />
+              </div>
+              
+              <div className="flex items-center justify-between p-3 bg-primary/10 rounded-lg border border-primary/20">
+                <div>
+                  <p className="text-sm text-muted-foreground">Maior Transação</p>
+                  <p className="text-lg font-bold text-primary">
+                    R$ {todayTransactions.length > 0 ? Math.max(...todayTransactions.map((t: any) => Number(t.amount || 0))).toLocaleString('pt-BR') : '0,00'}
+                  </p>
+                </div>
+                <ArrowUp className="h-8 w-8 text-primary/60" />
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                <div>
+                  <p className="text-sm text-muted-foreground">Funcionários Ativos</p>
+                  <p className="text-lg font-bold">
+                    {employees.filter((e: any) => e.status === 'active').length}
+                  </p>
+                </div>
+                <Trophy className="h-8 w-8 text-muted-foreground/60" />
+              </div>
+            </div>
+          </Card>
+
+          {/* Próximas Ações */}
+          <Card className="p-6 shadow-card">
+            <div className="flex items-center gap-3 mb-4">
+              <Lock className="h-6 w-6 text-primary" />
+              <h3 className="text-lg font-semibold">Ações do Dia</h3>
             </div>
             <div className="space-y-3">
-              {profit > 0 ? (
-                <div className="p-3 bg-success/10 border border-success/20 rounded-lg">
-                  <p className="text-sm text-success font-medium">
-                    🎉 Excelente! Você teve lucro hoje de R$ {profit.toLocaleString('pt-BR')}
-                  </p>
-                </div>
-              ) : profit < 0 ? (
-                <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
-                  <p className="text-sm text-destructive font-medium">
-                    ⚠️ Atenção: Prejuízo de R$ {Math.abs(profit).toLocaleString('pt-BR')} hoje
-                  </p>
-                </div>
-              ) : (
-                <div className="p-3 bg-muted/30 border border-muted rounded-lg">
-                  <p className="text-sm text-muted-foreground font-medium">
-                    📊 Resultado neutro hoje - R$ 0,00
-                  </p>
-                </div>
-              )}
+              <div className="p-3 bg-warning/10 rounded-lg border border-warning/20">
+                <p className="text-sm font-medium text-warning">Fechamento do Dia</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {transactionCount > 0 
+                    ? `Você tem ${transactionCount} transação(ões) para fechar`
+                    : 'Nenhuma transação registrada hoje'
+                  }
+                </p>
+              </div>
               
-              {transactionCount === 0 && (
-                <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg">
-                  <p className="text-sm text-primary font-medium">
-                    💡 Nenhuma transação hoje. Que tal registrar algumas movimentações?
-                  </p>
-                </div>
-              )}
-              
-              {transactionCount > 0 && totalDeposits > totalWithdraws && (
-                <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg">
-                  <p className="text-sm text-primary font-medium">
-                    📈 Você depositou mais do que sacou hoje. Mantenha essa estratégia!
-                  </p>
-                </div>
-              )}
+              <div className="p-3 bg-info/10 rounded-lg border border-info/20">
+                <p className="text-sm font-medium text-info">Meta Diária</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {profit >= 1000 
+                    ? '✅ Meta de R$ 1.000 atingida!'
+                    : `Faltam R$ ${(1000 - profit).toLocaleString('pt-BR')} para a meta`
+                  }
+                </p>
+              </div>
+
+              <div className="p-3 bg-success/10 rounded-lg border border-success/20">
+                <p className="text-sm font-medium text-success">Status do Dia</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {profit > 0 
+                    ? `✅ Dia lucrativo: +R$ ${profit.toLocaleString('pt-BR')}`
+                    : profit < 0 
+                    ? `⚠️ Prejuízo: R$ ${profit.toLocaleString('pt-BR')}`
+                    : '📊 Dia neutro: R$ 0,00'
+                  }
+                </p>
+              </div>
             </div>
           </Card>
         </div>
+
+        {/* Gráficos de Evolução e Performance */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Gráfico de Evolução do Saldo */}
+          <Card className="p-6 shadow-card">
+            <h3 className="text-lg font-semibold mb-6">Evolução do Saldo ao Longo do Dia</h3>
+            {todayTransactions.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={(() => {
+                  // Ordenar transações por horário
+                  const sortedTransactions = [...todayTransactions].sort((a: any, b: any) => {
+                    const dateA = new Date(a.createdAt?.toDate?.() || a.createdAt);
+                    const dateB = new Date(b.createdAt?.toDate?.() || b.createdAt);
+                    return dateA.getTime() - dateB.getTime();
+                  });
+
+                  // Calcular saldo acumulado
+                  let runningBalance = 0;
+                  return sortedTransactions.map((transaction: any, index: number) => {
+                    const amount = Number(transaction.amount || 0);
+                    const balanceChange = transaction.type === 'withdraw' ? amount : -amount;
+                    runningBalance += balanceChange;
+                    
+                    const date = new Date(transaction.createdAt?.toDate?.() || transaction.createdAt);
+                    const timeString = date.toLocaleTimeString('pt-BR', { 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    });
+
+                    // Encontrar funcionário e plataforma
+                    const employee = employees.find((e: any) => e.id === transaction.employeeId);
+                    const platform = platforms.find((p: any) => p.id === transaction.platformId);
+
+                    return {
+                      time: timeString,
+                      saldo: runningBalance,
+                      transacao: balanceChange,
+                      tipo: transaction.type === 'withdraw' ? 'Saque' : 'Depósito',
+                      funcionario: employee?.name || 'N/A',
+                      plataforma: platform?.name || 'N/A',
+                      valor: amount,
+                      index: index + 1
+                    };
+                  });
+                })()}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis 
+                    dataKey="time" 
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={11}
+                  />
+                  <YAxis 
+                    stroke="hsl(var(--muted-foreground))"
+                    tickFormatter={(value) => `R$ ${value.toLocaleString('pt-BR')}`}
+                    fontSize={11}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--card))', 
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                      fontSize: '12px'
+                    }}
+                    formatter={(value: number, name: string, props: any) => {
+                      if (name === 'saldo') {
+                        return [
+                          `R$ ${value.toLocaleString('pt-BR')}`, 
+                          'Saldo Acumulado'
+                        ];
+                      }
+                      return [
+                        `R$ ${value.toLocaleString('pt-BR')}`, 
+                        'Valor da Transação'
+                      ];
+                    }}
+                    labelFormatter={(label, payload) => {
+                      if (payload && payload[0]) {
+                        const data = payload[0].payload;
+                        return `${data.tipo} - ${data.funcionario} (${data.plataforma})`;
+                      }
+                      return label;
+                    }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="saldo" 
+                    stroke="hsl(var(--primary))" 
+                    strokeWidth={3}
+                    dot={{ fill: 'hsl(var(--primary))', strokeWidth: 2, r: 4 }}
+                    activeDot={{ r: 6, stroke: 'hsl(var(--primary))', strokeWidth: 2 }}
+                  />
+                  <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="5 5" />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[300px]">
+                <div className="text-center text-muted-foreground">
+                  <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium mb-2">Nenhuma transação registrada hoje</p>
+                  <p className="text-sm">Os dados aparecerão aqui quando você registrar transações</p>
+                </div>
+              </div>
+            )}
+          </Card>
+
+          {/* Gráfico de Performance por Plataforma */}
+          <Card className="p-6 shadow-card">
+            <h3 className="text-lg font-semibold mb-6">Performance por Plataforma</h3>
+            {platforms.length > 0 && platforms.some((p: any) => 
+              todayTransactions.some((t: any) => t.platformId === p.id)
+            ) ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={(() => {
+                  return platforms.map((platform: any) => {
+                    const platformTransactions = todayTransactions.filter((t: any) => t.platformId === platform.id);
+                    const platformDeposits = platformTransactions
+                      .filter((t: any) => t.type === 'deposit')
+                      .reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+                    const platformWithdraws = platformTransactions
+                      .filter((t: any) => t.type === 'withdraw')
+                      .reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+                    const platformProfit = platformWithdraws - platformDeposits;
+
+                    return {
+                      name: platform.name.length > 8 ? platform.name.substring(0, 8) + '...' : platform.name,
+                      lucro: platformProfit,
+                      depositos: platformDeposits,
+                      saques: platformWithdraws,
+                      transacoes: platformTransactions.length,
+                      color: platform.color
+                    };
+                  }).filter(p => p.transacoes > 0);
+                })()}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis 
+                    dataKey="name" 
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={11}
+                    angle={-45}
+                    textAnchor="end"
+                    height={60}
+                  />
+                  <YAxis 
+                    stroke="hsl(var(--muted-foreground))"
+                    tickFormatter={(value) => `R$ ${value.toLocaleString('pt-BR')}`}
+                    fontSize={11}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--card))', 
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                      fontSize: '12px'
+                    }}
+                    formatter={(value: number, name: string, props: any) => {
+                      const data = props.payload;
+                      if (name === 'lucro') {
+                        return [
+                          `R$ ${value.toLocaleString('pt-BR')}`, 
+                          'Lucro/Prejuízo'
+                        ];
+                      }
+                      return [
+                        `R$ ${value.toLocaleString('pt-BR')}`, 
+                        name === 'depositos' ? 'Depósitos' : 'Saques'
+                      ];
+                    }}
+                    labelFormatter={(label, payload) => {
+                      if (payload && payload[0]) {
+                        const data = payload[0].payload;
+                        return `${data.name} (${data.transacoes} transações)`;
+                      }
+                      return label;
+                    }}
+                  />
+                  <Bar 
+                    dataKey="lucro" 
+                    fill={(entry: any) => entry.lucro >= 0 ? 'hsl(var(--success))' : 'hsl(var(--destructive))'}
+                    radius={[4, 4, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[300px]">
+                <div className="text-center text-muted-foreground">
+                  <Target className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium mb-2">Nenhuma plataforma com transações hoje</p>
+                  <p className="text-sm">Os dados aparecerão aqui quando você registrar transações</p>
+                </div>
+              </div>
+            )}
+          </Card>
+        </div>
+
+        {/* Resumo Detalhado por Plataforma */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card className="p-6 shadow-card">
+            <h3 className="text-lg font-semibold mb-6">Performance por Plataforma</h3>
+            {platforms.length > 0 ? (
+              <div className="space-y-4">
+                {platforms.map((platform: any) => {
+                  const platformTransactions = todayTransactions.filter((t: any) => t.platformId === platform.id);
+                  const platformDeposits = platformTransactions
+                    .filter((t: any) => t.type === 'deposit')
+                    .reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+                  const platformWithdraws = platformTransactions
+                    .filter((t: any) => t.type === 'withdraw')
+                    .reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+                  const platformProfit = platformWithdraws - platformDeposits;
+
+                  return (
+                    <div key={platform.id} className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border">
+                      <div className="flex items-center gap-3">
+                        <div 
+                          className="w-4 h-4 rounded-full" 
+                          style={{ backgroundColor: platform.color }}
+                        />
+                        <div>
+                          <p className="font-medium">{platform.name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {platformTransactions.length} transação(ões)
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className={`font-bold ${platformProfit >= 0 ? 'text-success' : 'text-destructive'}`}>
+                          R$ {platformProfit.toLocaleString('pt-BR')}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {platformWithdraws > 0 && `R$ ${platformWithdraws.toLocaleString('pt-BR')} saques`}
+                          {platformDeposits > 0 && platformWithdraws > 0 && ' • '}
+                          {platformDeposits > 0 && `R$ ${platformDeposits.toLocaleString('pt-BR')} depósitos`}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <Target className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Nenhuma plataforma configurada</p>
+              </div>
+            )}
+          </Card>
+
+          {/* Resumo Detalhado por Funcionário */}
+          <Card className="p-6 shadow-card">
+            <h3 className="text-lg font-semibold mb-6">Performance por Funcionário</h3>
+            {employees.length > 0 ? (
+              <div className="space-y-4">
+                {employees.map((employee: any) => {
+                  const employeeTransactions = todayTransactions.filter((t: any) => t.employeeId === employee.id);
+                  const employeeDeposits = employeeTransactions
+                    .filter((t: any) => t.type === 'deposit')
+                    .reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+                  const employeeWithdraws = employeeTransactions
+                    .filter((t: any) => t.type === 'withdraw')
+                    .reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+                  const employeeProfit = employeeWithdraws - employeeDeposits;
+
+                  if (employeeTransactions.length === 0) return null;
+
+                  return (
+                    <div key={employee.id} className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border">
+                      <div>
+                        <p className="font-medium">{employee.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {employeeTransactions.length} transação(ões)
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className={`font-bold ${employeeProfit >= 0 ? 'text-success' : 'text-destructive'}`}>
+                          R$ {employeeProfit.toLocaleString('pt-BR')}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {employeeWithdraws > 0 && `R$ ${employeeWithdraws.toLocaleString('pt-BR')} saques`}
+                          {employeeDeposits > 0 && employeeWithdraws > 0 && ' • '}
+                          {employeeDeposits > 0 && `R$ ${employeeDeposits.toLocaleString('pt-BR')} depósitos`}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }).filter(Boolean)}
+                {employees.filter((e: any) => 
+                  todayTransactions.some((t: any) => t.employeeId === e.id)
+                ).length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Target className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>Nenhum funcionário com transações hoje</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <Target className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Nenhum funcionário cadastrado</p>
+              </div>
+            )}
+          </Card>
+        </div>
+
+        {/* Lista de Transações do Dia */}
         <Card className="shadow-card overflow-hidden">
           <div className="p-6 border-b">
             <div className="flex items-center justify-between">
@@ -985,7 +1248,7 @@ const ResumoDia = () => {
                         </Badge>
                       </td>
                       <td className={`p-4 text-right font-semibold ${
-                        transaction.type === 'deposit' ? 'text-success' : 'text-destructive'
+                        transaction.type === 'deposit' ? 'text-destructive' : 'text-success'
                       }`}>
                         {transaction.type === 'deposit' ? '-' : '+'}R$ {Number(transaction.amount || 0).toLocaleString('pt-BR')}
                       </td>

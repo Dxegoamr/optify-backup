@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -6,11 +6,9 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
-import { usePlanLimitations } from '@/hooks/usePlanLimitations';
 import { deleteUser } from 'firebase/auth';
 import { auth } from '@/integrations/firebase/config';
 import { deleteAllUserData } from '@/core/services/user-subcollections.service';
-import { UserBasicInfoService } from '@/core/services/user-basic-info.service';
 import { useNavigate } from 'react-router-dom';
 import { UserCircle, CreditCard, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -28,63 +26,13 @@ import {
 
 const Perfil = () => {
   const { user, logout } = useFirebaseAuth();
-  const { currentPlan } = usePlanLimitations();
   const navigate = useNavigate();
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [userInfo, setUserInfo] = useState<{
-    name: string;
-    phone: string;
-    email: string;
-  }>({
-    name: '',
-    phone: '',
-    email: ''
-  });
-  const [loading, setLoading] = useState(true);
+  const [isSubscribing, setIsSubscribing] = useState(false);
 
-  // Carregar informações do usuário
-  useEffect(() => {
-    const loadUserInfo = async () => {
-      if (!user?.uid) return;
-      
-      try {
-        setLoading(true);
-        const basicInfo = await UserBasicInfoService.getUserBasicInfo(user.uid);
-        
-        setUserInfo({
-          name: basicInfo?.name || user.name || user.email?.split('@')[0] || 'Usuário',
-          phone: basicInfo?.phone || '',
-          email: user.email || ''
-        });
-      } catch (error) {
-        console.error('Erro ao carregar informações do usuário:', error);
-        // Fallback para dados básicos
-        setUserInfo({
-          name: user.name || user.email?.split('@')[0] || 'Usuário',
-          phone: '',
-          email: user.email || ''
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadUserInfo();
-  }, [user]);
-
-  const handleSave = async () => {
-    if (!user?.uid) return;
-    
-    try {
-      await UserBasicInfoService.updateBasicInfo(user.uid, {
-        name: userInfo.name,
-        phone: userInfo.phone
-      });
-      toast.success('Perfil atualizado com sucesso!');
-    } catch (error) {
-      toast.error('Erro ao atualizar perfil. Tente novamente.');
-    }
+  const handleSave = () => {
+    toast.success('Perfil atualizado com sucesso!');
   };
 
   const handleDeleteAccount = async () => {
@@ -125,10 +73,59 @@ const Perfil = () => {
     setDeleteConfirmation('');
   };
 
+  const handleSubscribePlan = async () => {
+    if (!user?.email) {
+      toast.error('Não foi possível identificar seu e-mail. Faça login novamente.');
+      return;
+    }
+
+    try {
+      setIsSubscribing(true);
+      const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'optify-definitivo';
+      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const functionsUrl = isLocal
+        ? `http://localhost:5001/${projectId}/southamerica-east1/mpCreatePreference`
+        : `https://southamerica-east1-${projectId}.cloudfunctions.net/mpCreatePreference`;
+
+      // Preferir um campo de plano salvo no Firestore ou o badge/plan do usuário
+      const planValue = (user?.planId || user?.plan || 'standard').toString().toLowerCase();
+      const body = {
+        // Enviar o identificador do plano para o backend buscar no Firestore (id, slug ou nome)
+        plano: planValue,
+        periodo: 'mensal',
+        email: user.email,
+      };
+
+      const res = await fetch(functionsUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error('Falha ao criar preferência de pagamento.');
+        return;
+      }
+
+      const initPoint = data.initPoint || data.init_point || data.sandboxInitPoint;
+      if (initPoint) {
+        window.location.href = initPoint;
+      } else {
+        toast.error('Link de pagamento não retornado.');
+      }
+    } catch (error) {
+      toast.error('Erro ao iniciar assinatura.');
+    } finally {
+      setIsSubscribing(false);
+    }
+  };
+
   const mockPaymentHistory = [
-    { date: '2024-09-29', plan: 'Ultimate', amount: 99.90, status: 'paid' },
-    { date: '2024-08-30', plan: 'Ultimate', amount: 99.90, status: 'paid' },
-    { date: '2024-07-30', plan: 'Standard', amount: 49.00, status: 'paid' },
+    { date: '2024-10-01', plan: 'Ultimate', amount: 199, status: 'paid' },
+    { date: '2024-09-01', plan: 'Ultimate', amount: 199, status: 'paid' },
+    { date: '2024-08-01', plan: 'Standard', amount: 49, status: 'paid' },
   ];
 
   return (
@@ -147,15 +144,15 @@ const Perfil = () => {
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2">
-                <h2 className="text-2xl font-bold">{userInfo.name || user?.name || 'Usuário'}</h2>
+                <h2 className="text-2xl font-bold">{user?.name}</h2>
                 <Badge variant="default" className="capitalize">
-                  {currentPlan}
+                  {user?.plan}
                 </Badge>
                 {user?.isAdmin && (
                   <Badge variant="secondary">Admin</Badge>
                 )}
               </div>
-              <p className="text-muted-foreground mb-4">{userInfo.email}</p>
+              <p className="text-muted-foreground mb-4">{user?.email}</p>
               <Button variant="outline" size="sm" onClick={() => navigate('/planos')}>
                 Gerenciar Plano
               </Button>
@@ -170,32 +167,22 @@ const Perfil = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <Label>Nome Completo</Label>
-              <Input 
-                value={userInfo.name} 
-                onChange={(e) => setUserInfo(prev => ({ ...prev, name: e.target.value }))}
-                disabled={loading}
-              />
+              <Input defaultValue={user?.name} />
             </div>
 
             <div className="space-y-2">
               <Label>Email</Label>
-              <Input type="email" value={userInfo.email} disabled />
+              <Input type="email" defaultValue={user?.email} />
             </div>
 
             <div className="space-y-2">
               <Label>Telefone</Label>
-              <Input 
-                type="tel" 
-                placeholder="(11) 99999-9999"
-                value={userInfo.phone}
-                onChange={(e) => setUserInfo(prev => ({ ...prev, phone: e.target.value }))}
-                disabled={loading}
-              />
+              <Input type="tel" placeholder="(11) 99999-9999" />
             </div>
 
             <div className="space-y-2">
               <Label>CPF/CNPJ</Label>
-              <Input placeholder="000.000.000-00" disabled />
+              <Input placeholder="000.000.000-00" />
             </div>
           </div>
 
@@ -214,29 +201,30 @@ const Perfil = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
             <div>
               <p className="text-sm text-muted-foreground mb-1">Plano</p>
-              <p className="text-xl font-bold capitalize">{currentPlan}</p>
+              <p className="text-xl font-bold capitalize">{user?.plan}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground mb-1">
-                {currentPlan === 'free' ? 'Status' : 'Plano expira em'}
-              </p>
-              <p className="text-xl font-bold">
-                {currentPlan === 'free' ? 'Ativo' : '31/12/2025'}
-              </p>
+              <p className="text-sm text-muted-foreground mb-1">Próximo Pagamento</p>
+              <p className="text-xl font-bold">01/11/2024</p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground mb-1">Valor Mensal</p>
               <p className="text-xl font-bold">
-                {currentPlan === 'free' ? 'Grátis' : 
-                 currentPlan === 'standard' ? 'R$ 49,00' :
-                 currentPlan === 'medium' ? 'R$ 49,90' : 'R$ 99,90'}
+                {user?.plan === 'free' ? 'Grátis' : 
+                 user?.plan === 'standard' ? 'R$ 49' :
+                 user?.plan === 'medium' ? 'R$ 99' : 'R$ 199'}
               </p>
             </div>
           </div>
 
-          <Button variant="outline" onClick={() => navigate('/planos')}>
-            Alterar Plano
-          </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => navigate('/planos')}>
+                  Alterar Plano
+                </Button>
+                <Button onClick={handleSubscribePlan} disabled={isSubscribing}>
+                  {isSubscribing ? 'Redirecionando...' : 'Assinar Plano'}
+                </Button>
+              </div>
         </Card>
 
         {/* Payment History */}
@@ -263,7 +251,7 @@ const Perfil = () => {
                       {new Date(payment.date).toLocaleDateString('pt-BR')}
                     </td>
                     <td className="p-4">{payment.plan}</td>
-                    <td className="p-4 font-semibold">R$ {payment.amount.toFixed(2).replace('.', ',')}</td>
+                    <td className="p-4 font-semibold">R$ {payment.amount}</td>
                     <td className="p-4">
                       <Badge variant="default">Pago</Badge>
                     </td>

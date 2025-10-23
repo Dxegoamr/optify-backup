@@ -1,10 +1,10 @@
 import { 
   employeeService, 
+  platformService, 
   transactionService,
   collections,
   createDocument 
 } from '@/integrations/firebase/firestore';
-import { UserPlatformService } from '@/core/services/user-specific.service';
 import { firestoreUtils } from '@/integrations/firebase/firestore';
 
 export const generateFirebaseTestData = async (userId: string) => {
@@ -22,10 +22,10 @@ export const generateFirebaseTestData = async (userId: string) => {
     console.log('Criando plataformas...');
     const platformIds: string[] = [];
     for (const platform of testPlatforms) {
-      const platformId = await UserPlatformService.createPlatform(userId, {
+      const platformId = await platformService.create({
+        userId,
         name: platform.name,
-        color: platform.color,
-        isActive: true
+        color: platform.color
       });
       platformIds.push(platformId);
     }
