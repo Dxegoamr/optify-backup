@@ -1,16 +1,8 @@
-/**
- * Import function triggers from their respective submodules:
- *
- * import {onCall} from "firebase-functions/v2/https";
- * import {onDocumentWritten} from "firebase-functions/v2/firestore";
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
- */
+import { setGlobalOptions } from "firebase-functions";
 
-import {setGlobalOptions} from "firebase-functions";
-
-// Start writing functions
-// https://firebase.google.com/docs/functions/typescript
+// TODO: Habilitar após instalar @sentry/node
+// import { initSentry } from "./observability/sentry";
+// initSentry();
 
 // For cost control, you can set the maximum number of containers that can be
 // running at the same time. This helps mitigate the impact of unexpected
@@ -24,7 +16,38 @@ import {setGlobalOptions} from "firebase-functions";
 // this will be the maximum concurrent request count.
 setGlobalOptions({ maxInstances: 10 });
 
-// export const helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+// Export Mercado Pago functions (legacy)
+export { createPaymentPreference, checkPaymentStatus } from './mercadopago';
+
+// Export new secure webhook
+export { mercadoPagoWebhook, reconcilePayments } from './webhooks/mercado-pago';
+
+// Export Security functions
+export { setAdminClaim, verifyAdminStatus, listAdmins } from './security/claims';
+
+// Export Stats aggregations
+export { 
+  onTransactionCreated, 
+  onTransactionUpdated, 
+  onUserUpdated,
+  recalculateStatsDaily,
+  recalculateStatsWeekly 
+} from './stats/aggregations';
+
+// Export Auth functions
+export { deleteUserCompletely, canDeleteUser } from './auth/delete-user';
+
+// Export Scheduled cleanup functions
+export { 
+  cleanupRateLimits,
+  cleanupAbuseLogs,
+  cleanupBlacklist,
+  cleanupWebhookEvents,
+  cleanupIdempotency
+} from './scheduled/cleanup';
+
+// Export LGPD functions
+export { exportUserData, cleanupOldExports } from './lgpd/export-user-data';
+
+// Export AI Assistant functions
+export { generateAIResponse, generateAIResponseHTTP } from './ai/assistant';

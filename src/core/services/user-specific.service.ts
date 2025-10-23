@@ -268,14 +268,6 @@ export class UserDailySummaryService {
     return summaries.length > 0 ? summaries[0] : null;
   }
 
-  static async updateDailySummary(userId: string, summaryId: string, data: Partial<UserDailySummary>): Promise<void> {
-    return UserSubcollectionsService.updateUserSubcollection(
-      userId, 
-      USER_SUBCOLLECTIONS.DAILY_SUMMARIES, 
-      summaryId, 
-      data
-    );
-  }
 }
 
 export class UserAccountService {

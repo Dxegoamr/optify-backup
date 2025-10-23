@@ -305,7 +305,98 @@ All colors MUST be HSL.
   }
 
   /* Responsividade melhorada */
-  @media (max-width: 768px) {
+  html {
+    overflow-x: hidden;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    overflow-x: hidden;
+    min-height: 100vh;
+    width: 100%;
+  }
+
+  /* Container responsivo global */
+  .container-responsive {
+    @apply w-full max-w-none px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Grid responsivo */
+  .grid-responsive {
+    @apply grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4;
+  }
+
+  .grid-responsive-2 {
+    @apply grid grid-cols-1 gap-4 sm:grid-cols-2;
+  }
+
+  .grid-responsive-3 {
+    @apply grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3;
+  }
+
+  .grid-responsive-4 {
+    @apply grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4;
+  }
+
+  /* Flexbox responsivo */
+  .flex-responsive {
+    @apply flex flex-col sm:flex-row;
+  }
+
+  .flex-responsive-wrap {
+    @apply flex flex-wrap gap-4;
+  }
+
+  /* Espaçamento responsivo */
+  .space-responsive {
+    @apply space-y-4 sm:space-y-6 lg:space-y-8;
+  }
+
+  .space-x-responsive {
+    @apply space-x-2 sm:space-x-4 lg:space-x-6;
+  }
+
+  /* Texto responsivo */
+  .text-responsive {
+    @apply text-sm sm:text-base lg:text-lg;
+  }
+
+  .text-responsive-lg {
+    @apply text-lg sm:text-xl lg:text-2xl;
+  }
+
+  .text-responsive-xl {
+    @apply text-xl sm:text-2xl lg:text-3xl xl:text-4xl;
+  }
+
+  /* Padding responsivo */
+  .p-responsive {
+    @apply p-4 sm:p-6 lg:p-8;
+  }
+
+  .px-responsive {
+    @apply px-4 sm:px-6 lg:px-8;
+  }
+
+  .py-responsive {
+    @apply py-4 sm:py-6 lg:py-8;
+  }
+
+  /* Margin responsivo */
+  .m-responsive {
+    @apply m-4 sm:m-6 lg:m-8;
+  }
+
+  .mx-responsive {
+    @apply mx-4 sm:mx-6 lg:mx-8;
+  }
+
+  .my-responsive {
+    @apply my-4 sm:my-6 lg:my-8;
+  }
+
+  /* Breakpoints específicos */
+  @media (max-width: 640px) {
     .mobile-stack {
       @apply flex-col space-y-4;
     }
@@ -313,5 +404,118 @@ All colors MUST be HSL.
     .mobile-full {
       @apply w-full;
     }
+
+    .mobile-text-sm {
+      @apply text-sm;
+    }
+
+    .mobile-p-2 {
+      @apply p-2;
+    }
+
+    .mobile-hidden {
+      @apply hidden;
+    }
+  }
+
+  @media (min-width: 641px) and (max-width: 768px) {
+    .tablet-grid-2 {
+      @apply grid-cols-2;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .desktop-grid-3 {
+      @apply grid-cols-3;
+    }
+
+    .desktop-grid-4 {
+      @apply grid-cols-4;
+    }
+
+    .desktop-flex-row {
+      @apply flex-row;
+    }
+  }
+
+  @media (min-width: 1280px) {
+    .xl-grid-5 {
+      @apply grid-cols-5;
+    }
+
+    .xl-text-5xl {
+      @apply text-5xl;
+    }
+  }
+
+  @media (min-width: 1536px) {
+    .2xl-grid-6 {
+      @apply grid-cols-6;
+    }
+
+    .2xl-max-w-7xl {
+      @apply max-w-7xl;
+    }
+  }
+
+  /* Prevenção de overflow horizontal */
+  .overflow-safe {
+    @apply overflow-x-hidden;
+  }
+
+  /* Larguras máximas responsivas */
+  .max-w-responsive {
+    @apply max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl 2xl:max-w-2xl;
+  }
+
+  .max-w-screen-responsive {
+    @apply max-w-screen-sm sm:max-w-screen-md md:max-w-screen-lg lg:max-w-screen-xl xl:max-w-screen-2xl;
+  }
+}
+
+/* Dashboard specific responsive improvements */
+.dashboard-grid {
+  @apply grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 lg:gap-6;
+}
+
+@media (min-width: 1280px) {
+  .dashboard-grid {
+    @apply grid-cols-4;
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .dashboard-grid {
+    @apply grid-cols-2 gap-6;
+  }
+}
+
+/* Card alignment improvements for better consistency */
+.stat-card {
+  @apply flex flex-col h-full;
+}
+
+.stat-card-content {
+  @apply flex items-center justify-between flex-1;
+}
+
+.stat-card-text {
+  @apply flex-1 space-y-3;
+}
+
+.stat-card-icon {
+  @apply flex-shrink-0 ml-4;
+}
+
+/* Ensure consistent card heights across different screen sizes */
+@media (min-width: 768px) and (max-width: 1279px) {
+  .stat-card {
+    @apply min-h-[140px];
+  }
+}
+
+@media (min-width: 1280px) {
+  .stat-card {
+    @apply min-h-[160px];
   }
 }

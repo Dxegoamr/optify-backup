@@ -6,7 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Loader2 } from 'lucide-react';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
-import { useCreateEmployee } from '@/hooks/useFirestore';
+import { useCreateEmployee, useEmployees } from '@/hooks/useFirestore';
+import { usePlanLimitations } from '@/hooks/usePlanLimitations';
 import { toast } from 'sonner';
 
 interface EmployeeFormData {
@@ -21,6 +22,8 @@ interface EmployeeFormData {
 const EmployeeFormModal = () => {
   const { user } = useFirebaseAuth();
   const createEmployee = useCreateEmployee();
+  const { data: employees = [] } = useEmployees(user?.uid || '');
+  const { canAddMoreEmployees } = usePlanLimitations();
   const [open, setOpen] = useState(false);
   const [formData, setFormData] = useState<EmployeeFormData>({
     name: '',
@@ -94,6 +97,11 @@ const EmployeeFormModal = () => {
     
     if (!user?.uid) {
       toast.error('Usuário não autenticado');
+      return;
+    }
+
+    if (!canAddMoreEmployees()) {
+      toast.error('Você atingiu o limite de funcionários do seu plano. Faça upgrade para adicionar mais funcionários.');
       return;
     }
 

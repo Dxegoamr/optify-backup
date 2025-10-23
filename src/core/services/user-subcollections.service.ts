@@ -83,10 +83,23 @@ export class UserSubcollectionsService {
         Object.entries(data).filter(([_, value]) => value !== undefined)
       );
       
-      await updateDoc(docRef, {
-        ...cleanData,
-        updatedAt: serverTimestamp()
-      });
+      // Verificar se o documento existe, se não existir, criar
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        // Documento existe, apenas atualizar
+        await updateDoc(docRef, {
+          ...cleanData,
+          updatedAt: serverTimestamp()
+        });
+      } else {
+        // Documento não existe, criar com dados iniciais
+        await setDoc(docRef, {
+          ...cleanData,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      }
     } catch (error) {
       console.error(`Erro ao atualizar ${subcollection}:`, error);
       throw new Error(`Falha ao atualizar dados de ${subcollection}`);

@@ -11,8 +11,9 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
   const navigate = useNavigate();
-  const { signIn, user } = useFirebaseAuth();
+  const { signIn, user, resetPassword } = useFirebaseAuth();
 
   if (user) {
     navigate('/dashboard');
@@ -31,6 +32,34 @@ const Login = () => {
       toast.error('Erro ao fazer login. Tente novamente.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    console.log('🔵 handleResetPassword chamado!', { email: email.trim() });
+    
+    if (!email.trim()) {
+      toast.error('Digite seu e-mail para recuperar a senha');
+      return;
+    }
+
+    console.log('🟢 Enviando email de reset...');
+    setResetLoading(true);
+    try {
+      await resetPassword(email);
+      toast.success('E-mail de recuperação enviado! Verifique sua caixa de entrada.');
+      console.log('✅ Email enviado com sucesso!');
+    } catch (error: any) {
+      console.error('❌ Erro ao enviar email:', error);
+      if (error?.code === 'auth/user-not-found') {
+        toast.error('E-mail não encontrado. Verifique se o e-mail está correto.');
+      } else if (error?.code === 'auth/invalid-email') {
+        toast.error('E-mail inválido. Verifique o formato do e-mail.');
+      } else {
+        toast.error('Erro ao enviar e-mail de recuperação. Tente novamente.');
+      }
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -133,6 +162,28 @@ const Login = () => {
           </Button>
         </form>
 
+        <div className="text-center mt-4">
+          <button
+            type="button"
+            onClick={(e) => {
+              console.log('🟢 Botão clicado!');
+              e.preventDefault();
+              e.stopPropagation();
+              handleResetPassword();
+            }}
+            className="text-sm text-primary hover:text-primary/80 transition-colors underline font-medium px-2 py-1 rounded hover:bg-primary/10 cursor-pointer"
+          >
+            {resetLoading ? (
+              <>
+                <Loader2 className="mr-2 h-3 w-3 animate-spin inline" />
+                Enviando...
+              </>
+            ) : (
+              'Esqueci minha senha'
+            )}
+          </button>
+        </div>
+
         <div className="mt-6 text-center text-sm">
           <span className="text-muted-foreground">Não tem uma conta? </span>
           <button
@@ -141,12 +192,6 @@ const Login = () => {
           >
             Cadastre-se
           </button>
-        </div>
-
-        <div className="mt-4 p-4 bg-muted/50 rounded-lg text-xs text-muted-foreground">
-          <p className="font-semibold mb-1">Teste com:</p>
-          <p>Email: admin@optify.com</p>
-          <p>Senha: qualquer senha</p>
         </div>
       </div>
     </div>

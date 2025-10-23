@@ -1,0 +1,211 @@
+import * as Sentry from '@sentry/react';
+import React from 'react';
+
+// Configuração do Sentry para o frontend
+export const initSentry = () => {
+  const dsn = import.meta.env.VITE_SENTRY_DSN;
+  
+  if (!dsn) {
+    console.warn('Sentry DSN não configurado');
+    return;
+  }
+
+  Sentry.init({
+    dsn,
+    environment: import.meta.env.MODE,
+    release: import.meta.env.VITE_APP_VERSION || '1.0.0',
+    
+    // Performance monitoring
+    tracesSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
+    profilesSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
+    
+    // Error tracking
+    beforeSend(event) {
+      // Filtrar erros conhecidos que não são relevantes
+      if (event.exception) {
+        const error = event.exception.values?.[0];
+        if (error?.type === 'ChunkLoadError' || error?.type === 'Loading chunk') {
+          // Ignorar erros de carregamento de chunks (code splitting)
+          return null;
+        }
+        if (error?.value?.includes('Non-Error promise rejection captured')) {
+          // Ignorar promises rejeitadas que não são erros
+          return null;
+        }
+      }
+      
+      // Adicionar informações do usuário se disponível
+      const user = (window as any).__OPTIFY_USER__;
+      if (user) {
+        event.user = {
+          id: user.uid,
+          email: user.email,
+          username: user.displayName,
+        };
+      }
+      
+      return event;
+    },
+    
+    // Integrations
+    integrations: [
+      Sentry.browserTracingIntegration(),
+      Sentry.replayIntegration({
+        maskAllText: false,
+        blockAllMedia: false,
+      }),
+    ],
+    
+    // Configurações específicas do ambiente
+    ...(import.meta.env.PROD && {
+      beforeBreadcrumb(breadcrumb) {
+        // Filtrar breadcrumbs sensíveis em produção
+        if (breadcrumb.category === 'console') {
+          return null;
+        }
+        return breadcrumb;
+      },
+    }),
+  });
+
+  // Configurar contexto global
+  Sentry.setTag('app', 'optify');
+  Sentry.setTag('platform', 'web');
+  
+  console.log('✅ Sentry inicializado');
+};
+
+// Componente simples para wrapper (sem JSX inline)
+const SentryProviderComponent = ({ children }: { children: React.ReactNode }) => {
+  return React.createElement(React.Fragment, null, children);
+};
+
+const SentryFallback = ({ error, resetError }: { error: Error; resetError: () => void }) => {
+  return React.createElement(
+    'div',
+    { className: 'min-h-screen flex items-center justify-center bg-background' },
+    React.createElement(
+      'div',
+      { className: 'text-center space-y-4 p-8' },
+      React.createElement('h1', { className: 'text-2xl font-bold text-foreground' }, 'Ops! Algo deu errado'),
+      React.createElement('p', { className: 'text-muted-foreground' }, 'Ocorreu um erro inesperado. Nossa equipe foi notificada.'),
+      React.createElement(
+        'div',
+        { className: 'space-x-4' },
+        React.createElement(
+          'button',
+          {
+            onClick: resetError,
+            className: 'px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90',
+          },
+          'Tentar Novamente'
+        ),
+        React.createElement(
+          'button',
+          {
+            onClick: () => (window.location.href = '/dashboard'),
+            className: 'px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/90',
+          },
+          'Voltar ao Dashboard'
+        )
+      )
+    )
+  );
+};
+
+// Wrapper para componentes React
+export const SentryProvider = Sentry.withErrorBoundary(SentryProviderComponent, {
+  fallback: SentryFallback,
+  beforeCapture: (scope, error) => {
+    scope.setTag('errorBoundary', true);
+    scope.setContext('errorInfo', {
+      componentStack: (error as any).componentStack,
+    });
+  },
+});
+
+// Hook para capturar erros manualmente
+export const useSentry = () => {
+  const captureError = (error: Error, context?: Record<string, any>) => {
+    Sentry.captureException(error, {
+      tags: {
+        source: 'manual',
+      },
+      extra: context,
+    });
+  };
+
+  const captureMessage = (message: string, level: 'info' | 'warning' | 'error' = 'info') => {
+    Sentry.captureMessage(message, level);
+  };
+
+  const setUser = (user: { id: string; email?: string; username?: string }) => {
+    Sentry.setUser(user);
+  };
+
+  const addBreadcrumb = (message: string, category?: string, level?: 'info' | 'warning' | 'error') => {
+    Sentry.addBreadcrumb({
+      message,
+      category: category || 'user',
+      level: level || 'info',
+    });
+  };
+
+  const setContext = (key: string, context: any) => {
+    Sentry.setContext(key, context);
+  };
+
+  const setTag = (key: string, value: string) => {
+    Sentry.setTag(key, value);
+  };
+
+  return {
+    captureError,
+    captureMessage,
+    setUser,
+    addBreadcrumb,
+    setContext,
+    setTag,
+  };
+};
+
+// Função para configurar usuário no contexto global
+export const setSentryUser = (user: any) => {
+  if (user) {
+    (window as any).__OPTIFY_USER__ = user;
+    Sentry.setUser({
+      id: user.uid,
+      email: user.email,
+      username: user.displayName,
+    });
+  } else {
+    delete (window as any).__OPTIFY_USER__;
+    Sentry.setUser(null);
+  }
+};
+
+// Função para capturar eventos de negócio
+export const captureBusinessEvent = (event: string, data?: Record<string, any>) => {
+  Sentry.addBreadcrumb({
+    message: event,
+    category: 'business',
+    level: 'info',
+    data,
+  });
+};
+
+// Função para capturar performance de operações
+export const capturePerformance = (operation: string, duration: number, success: boolean) => {
+  Sentry.addBreadcrumb({
+    message: `Performance: ${operation}`,
+    category: 'performance',
+    level: success ? 'info' : 'warning',
+    data: {
+      operation,
+      duration,
+      success,
+    },
+  });
+};
+
+export default Sentry;

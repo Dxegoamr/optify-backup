@@ -531,18 +531,15 @@ const EmployeeProfile = () => {
                         </span>
                       </TableCell>
                       <TableCell>
-                        {new Date(transaction.createdAt?.toDate?.() || transaction.date).toLocaleString('pt-BR', {
+                        {new Date(transaction.createdAt?.toDate?.() || transaction.date).toLocaleDateString('pt-BR', {
                           timeZone: 'America/Sao_Paulo',
                           day: '2-digit',
                           month: '2-digit',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          second: '2-digit'
+                          year: 'numeric'
                         })}
                       </TableCell>
                       <TableCell>
-                        <span className={transaction.type === 'deposit' ? 'text-destructive' : 'text-success'}>
+                        <span className={transaction.type === 'deposit' ? 'text-success' : 'text-destructive'}>
                           {transaction.type === 'deposit' ? '-' : '+'}R${' '}
                           {Number(transaction.amount).toLocaleString('pt-BR')}
                         </span>

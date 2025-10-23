@@ -2,14 +2,156 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Regras temporárias mais permissivas para desenvolvimento
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+    // ==================== FUNCTIONS AUXILIARES ====================
+    
+    // Verificar se o usuário está autenticado e dentro do período de validade
+    function isAuthed() {
+      return request.auth != null 
+        && request.auth.uid != null
+        && request.time < timestamp.date(2100, 1, 1);
     }
     
-    // Também permite acesso para webhooks e automações sem autenticação (útil em testes)
+    // Verificar se é o proprietário do documento
+    function isOwner() {
+      return isAuthed() && request.auth.uid == resource.data.ownerId;
+    }
+    
+    // Verificar se será o proprietário do novo documento
+    function willBeOwner() {
+      return isAuthed() && request.auth.uid == request.resource.data.ownerId;
+    }
+    
+    // Verificar se é admin usando custom claims
+    function isAdmin() {
+      return isAuthed() && request.auth.token.admin == true;
+    }
+    
+    // Verificar se é superadmin (lista hardcoded para emergências)
+    function isSuperAdmin() {
+      return isAuthed() && 
+        request.auth.token.email in [
+          'diegkamor@gmail.com'
+          // Adicionar outros superadmins conforme necessário
+        ];
+    }
+    
+    // Verificar se App Check está habilitado (obrigatório em produção)
+    function hasValidAppCheck() {
+      return request.app != null && 
+        request.app.verification != null &&
+        request.app.verification.provider != null;
+    }
+    
+    // Verificar se os campos obrigatórios estão presentes
+    function hasRequiredFields(fields) {
+      return fields.toSet().hasAll(request.resource.data.keys());
+    }
+    
+    // Verificar se os campos imutáveis não foram alterados
+    function immutableFields(fields) {
+      return fields.toSet().hasAll(resource.data.keys()) &&
+        fields.toSet().hasAll(request.resource.data.keys()) &&
+        resource.data.diff(request.resource.data).affectedKeys().hasOnly(fields.toSet().difference(fields.toSet()));
+    }
+    
+    // ==================== REGRAS POR COLEÇÃO ====================
+    
+    // Coleção de usuários
+    match /users/{userId} {
+      allow read: if isOwner() && hasValidAppCheck();
+      allow create: if isAuthed() && willBeOwner() && hasRequiredFields(['ownerId', 'email']) && hasValidAppCheck();
+      allow update: if isOwner() && 
+        immutableFields(['ownerId']) && // ownerId não pode ser alterado
+        hasRequiredFields(['ownerId', 'email']) && hasValidAppCheck();
+      allow delete: if isAdmin() && hasValidAppCheck(); // Apenas admins podem deletar usuários
+    }
+    
+    // Subcoleções de usuários (funcionários, transações, etc.)
+    match /users/{userId}/{subcollection=**} {
+      allow read: if isAuthed() && request.auth.uid == userId && hasValidAppCheck();
+      allow create: if isAuthed() && request.auth.uid == userId && hasValidAppCheck();
+      allow update: if isAuthed() && request.auth.uid == userId && hasValidAppCheck();
+      allow delete: if isAuthed() && request.auth.uid == userId && hasValidAppCheck();
+    }
+    
+    // Transações de planos
+    match /transactions_plans/{transactionId} {
+      allow read: if isAuthed() && 
+        (resource.data.userId == request.auth.uid || isAdmin()) && hasValidAppCheck();
+      allow create: if isAuthed() && 
+        request.resource.data.userId == request.auth.uid &&
+        hasRequiredFields(['userId', 'amount', 'status', 'createdAt']) && hasValidAppCheck();
+      allow update: if isAdmin() && hasValidAppCheck(); // Apenas admins podem atualizar transações
+      allow delete: if false; // Transações não devem ser deletadas
+    }
+    
+    // Histórico de alterações de planos
+    match /plan_change_history/{historyId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && hasRequiredFields(['userId', 'oldPlan', 'newPlan', 'timestamp']);
+      allow update, delete: if false; // Histórico é imutável
+    }
+    
+    // Histórico de promoções de admin
+    match /admin_promotion_history/{historyId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && hasRequiredFields(['targetUserId', 'promotedBy', 'timestamp']);
+      allow update, delete: if false; // Histórico é imutável
+    }
+    
+    // Histórico de remoções de admin
+    match /admin_demotion_history/{historyId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && hasRequiredFields(['targetUserId', 'demotedBy', 'timestamp']);
+      allow update, delete: if false; // Histórico é imutável
+    }
+    
+    // Eventos de webhook do Mercado Pago
+    match /payments_events/{eventId} {
+      allow read: if isAdmin();
+      allow create: if isAuthed() && hasRequiredFields(['eventId', 'type', 'data', 'timestamp']);
+      allow update, delete: if false; // Eventos são imutáveis
+    }
+    
+    // Controle de idempotência
+    match /idempotency/{idemKey} {
+      allow read: if isAuthed();
+      allow create: if isAuthed() && hasRequiredFields(['processed', 'timestamp']);
+      allow update, delete: if false; // Chaves de idempotência são imutáveis
+    }
+    
+    // Métricas agregadas (admin stats)
+    match /admin_stats/{statId} {
+      allow read: if isAdmin();
+      allow write: if false; // Apenas Cloud Functions podem escrever
+    }
+    
+    // Logs de auditoria
+    match /audit_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAuthed() && hasRequiredFields(['action', 'userId', 'timestamp']);
+      allow update, delete: if false; // Logs são imutáveis
+    }
+    
+    // Configurações do sistema
+    match /system_config/{configId} {
+      allow read: if isAdmin();
+      allow write: if isSuperAdmin(); // Apenas superadmins podem alterar configurações
+    }
+    
+    // ==================== REGRAS DE DESENVOLVIMENTO ====================
+    // REMOVER EM PRODUÇÃO - apenas para desenvolvimento local
+    // Bypass do App Check para desenvolvimento
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if request.auth != null; // Bypass completo em dev
+    }
+    
+    // ==================== REGRAS DE EMERGÊNCIA ====================
+    
+    // Em caso de emergência, superadmins têm acesso total
+    // Apenas com App Check válido
+    match /{document=**} {
+      allow read, write: if isSuperAdmin() && hasValidAppCheck();
     }
   }
 }

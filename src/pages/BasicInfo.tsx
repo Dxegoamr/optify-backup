@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { User } from 'lucide-react';
 import { UserBasicInfoService } from '@/core/services/user-basic-info.service';
+import { UserProfileService } from '@/core/services/user-profile.service';
 
 const BasicInfo = () => {
   const [name, setName] = useState('');
@@ -31,7 +32,16 @@ const BasicInfo = () => {
         return;
       }
 
+      // Salvar informações básicas na subcoleção
       await UserBasicInfoService.saveBasicInfo(user.uid, { name, phone });
+      
+      // Atualizar também o perfil principal com o nome
+      await UserProfileService.createOrUpdateUserProfile(user.uid, {
+        email: user.email || '',
+        name: name,
+        displayName: name,
+        plano: 'free'
+      });
       
       toast.success('Informações básicas salvas!');
       navigate('/initial-setup');

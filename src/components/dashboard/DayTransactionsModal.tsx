@@ -7,7 +7,8 @@ import { toast } from 'sonner';
 import { Trash2, TrendingUp, TrendingDown } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
-import { usePlatforms, useTransactions, useCreateTransaction, useDeleteTransaction } from '@/hooks/useFirestore';
+import { usePlanLimitations } from '@/hooks/usePlanLimitations';
+import { usePlatforms, useTransactions, useCreateTransaction, useDeleteTransaction, useEmployees } from '@/hooks/useFirestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -17,15 +18,24 @@ interface DayTransactionsModalProps {
 
 const DayTransactionsModal = ({ date }: DayTransactionsModalProps) => {
   const { user } = useFirebaseAuth();
+  const { getAllowedEmployees } = usePlanLimitations();
   const [depositAmount, setDepositAmount] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
-  const [depositPlatform, setDepositPlatform] = useState('');
-  const [withdrawPlatform, setWithdrawPlatform] = useState('');
+  const [depositPlatform, setDepositPlatform] = useState('none');
+  const [withdrawPlatform, setWithdrawPlatform] = useState('none');
+  const [depositEmployee, setDepositEmployee] = useState('none');
+  const [withdrawEmployee, setWithdrawEmployee] = useState('none');
 
   const dateStr = format(date, 'yyyy-MM-dd');
 
   // Buscar plataformas
   const { data: platforms = [] } = usePlatforms(user?.uid || '');
+  
+  // Buscar funcionários
+  const { data: allEmployees = [] } = useEmployees(user?.uid || '');
+  
+  // Filtrar funcionários baseado no plano
+  const employees = getAllowedEmployees(allEmployees);
   
   // Buscar transações do dia
   const { data: allTransactions = [] } = useTransactions(user?.uid || '');
@@ -39,17 +49,17 @@ const DayTransactionsModal = ({ date }: DayTransactionsModalProps) => {
   const createTransaction = useCreateTransaction();
   const deleteTransaction = useDeleteTransaction();
 
-  const handleCreateTransaction = async (type: 'deposit' | 'withdraw', amount: string, platformId: string) => {
-    if (!user?.uid || !amount || !platformId) {
-      toast.error('Preencha todos os campos');
+  const handleCreateTransaction = async (type: 'deposit' | 'withdraw', amount: string, platformId?: string, employeeId?: string) => {
+    if (!user?.uid || !amount) {
+      toast.error('Preencha o valor da transação');
       return;
     }
 
     try {
       const transactionData = {
         userId: user.uid,
-        employeeId: '', // Por enquanto vazio, pode ser implementado depois
-        platformId: platformId,
+        employeeId: employeeId === 'none' ? '' : (employeeId || ''), // Converter 'none' para string vazia
+        platformId: platformId === 'none' ? '' : (platformId || ''), // Converter 'none' para string vazia
         type,
         amount: Number(amount),
         date: dateStr
@@ -66,10 +76,12 @@ const DayTransactionsModal = ({ date }: DayTransactionsModalProps) => {
       // Limpar campos
       if (type === 'deposit') {
         setDepositAmount('');
-        setDepositPlatform('');
+        setDepositPlatform('none');
+        setDepositEmployee('none');
       } else {
         setWithdrawAmount('');
-        setWithdrawPlatform('');
+        setWithdrawPlatform('none');
+        setWithdrawEmployee('none');
       }
     } catch (error) {
       console.error('Erro ao criar transação:', error);
@@ -89,6 +101,7 @@ const DayTransactionsModal = ({ date }: DayTransactionsModalProps) => {
   };
 
   const getPlatformName = (platformId: string) => {
+    if (!platformId) return 'N/A';
     const platform = platforms.find((p: any) => p.id === platformId);
     return platform?.name || 'N/A';
   };
@@ -96,6 +109,12 @@ const DayTransactionsModal = ({ date }: DayTransactionsModalProps) => {
   const getPlatformColor = (platformId: string) => {
     const platform = platforms.find((p: any) => p.id === platformId);
     return platform?.color || '#666';
+  };
+
+  const getEmployeeName = (employeeId: string) => {
+    if (!employeeId) return 'N/A';
+    const employee = employees.find((e: any) => e.id === employeeId);
+    return employee?.name || 'N/A';
   };
 
   return (
@@ -114,7 +133,7 @@ const DayTransactionsModal = ({ date }: DayTransactionsModalProps) => {
         {/* Registrar Depósito */}
         <div className="space-y-4 p-4 border rounded-lg">
           <div className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-success" />
+            <TrendingDown className="h-5 w-5 text-destructive" />
             <h3 className="text-lg font-semibold">Registrar Depósito</h3>
           </div>
           
@@ -131,12 +150,13 @@ const DayTransactionsModal = ({ date }: DayTransactionsModalProps) => {
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="deposit-platform">Plataforma</Label>
+            <Label htmlFor="deposit-platform">Plataforma (opcional)</Label>
             <Select value={depositPlatform} onValueChange={setDepositPlatform}>
               <SelectTrigger>
-                <SelectValue placeholder="Selecione..." />
+                <SelectValue placeholder="Selecione uma plataforma..." />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="none">Nenhuma plataforma</SelectItem>
                 {platforms.map((platform: any) => (
                   <SelectItem key={platform.id} value={platform.id}>
                     {platform.name}
@@ -146,12 +166,29 @@ const DayTransactionsModal = ({ date }: DayTransactionsModalProps) => {
             </Select>
           </div>
           
+          <div className="space-y-2">
+            <Label htmlFor="deposit-employee">Funcionário (opcional)</Label>
+            <Select value={depositEmployee} onValueChange={setDepositEmployee}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione um funcionário..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Nenhum funcionário</SelectItem>
+                {employees.map((employee: any) => (
+                  <SelectItem key={employee.id} value={employee.id}>
+                    {employee.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
           <Button
-            onClick={() => handleCreateTransaction('deposit', depositAmount, depositPlatform)}
+            onClick={() => handleCreateTransaction('deposit', depositAmount, depositPlatform, depositEmployee)}
             className="w-full gap-2"
-            disabled={!depositAmount || !depositPlatform || createTransaction.isPending}
+            disabled={!depositAmount || createTransaction.isPending}
           >
-            <TrendingUp className="h-4 w-4" />
+            <TrendingDown className="h-4 w-4" />
             Registrar Depósito
           </Button>
         </div>
@@ -159,7 +196,7 @@ const DayTransactionsModal = ({ date }: DayTransactionsModalProps) => {
         {/* Registrar Saque */}
         <div className="space-y-4 p-4 border rounded-lg">
           <div className="flex items-center gap-2">
-            <TrendingDown className="h-5 w-5 text-destructive" />
+            <TrendingUp className="h-5 w-5 text-success" />
             <h3 className="text-lg font-semibold">Registrar Saque</h3>
           </div>
           
@@ -176,12 +213,13 @@ const DayTransactionsModal = ({ date }: DayTransactionsModalProps) => {
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="withdraw-platform">Plataforma</Label>
+            <Label htmlFor="withdraw-platform">Plataforma (opcional)</Label>
             <Select value={withdrawPlatform} onValueChange={setWithdrawPlatform}>
               <SelectTrigger>
-                <SelectValue placeholder="Selecione..." />
+                <SelectValue placeholder="Selecione uma plataforma..." />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="none">Nenhuma plataforma</SelectItem>
                 {platforms.map((platform: any) => (
                   <SelectItem key={platform.id} value={platform.id}>
                     {platform.name}
@@ -191,12 +229,29 @@ const DayTransactionsModal = ({ date }: DayTransactionsModalProps) => {
             </Select>
           </div>
           
+          <div className="space-y-2">
+            <Label htmlFor="withdraw-employee">Funcionário (opcional)</Label>
+            <Select value={withdrawEmployee} onValueChange={setWithdrawEmployee}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione um funcionário..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Nenhum funcionário</SelectItem>
+                {employees.map((employee: any) => (
+                  <SelectItem key={employee.id} value={employee.id}>
+                    {employee.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
           <Button
-            onClick={() => handleCreateTransaction('withdraw', withdrawAmount, withdrawPlatform)}
+            onClick={() => handleCreateTransaction('withdraw', withdrawAmount, withdrawPlatform, withdrawEmployee)}
             className="w-full gap-2"
-            disabled={!withdrawAmount || !withdrawPlatform || createTransaction.isPending}
+            disabled={!withdrawAmount || createTransaction.isPending}
           >
-            <TrendingDown className="h-4 w-4" />
+            <TrendingUp className="h-4 w-4" />
             Registrar Saque
           </Button>
         </div>
@@ -222,19 +277,22 @@ const DayTransactionsModal = ({ date }: DayTransactionsModalProps) => {
                     variant={transaction.type === 'deposit' ? 'default' : 'destructive'}
                     style={{ backgroundColor: getPlatformColor(transaction.platformId) }}
                   >
-                    {transaction.type === 'deposit' ? 'Receita' : 'Despesa'}
+                    {transaction.type === 'deposit' ? 'Depósito' : 'Saque'}
                   </Badge>
                   
                   <div>
                     <div className="font-medium">{getPlatformName(transaction.platformId)}</div>
                     <div className="text-sm text-muted-foreground">
-                      {format(new Date(transaction.createdAt?.toDate?.() || transaction.date), 'HH:mm')}
+                      {getEmployeeName(transaction.employeeId) !== 'N/A' && (
+                        <span className="block">Funcionário: {getEmployeeName(transaction.employeeId)}</span>
+                      )}
+                      <span>{format(new Date(transaction.createdAt?.toDate?.() || transaction.date), 'HH:mm')}</span>
                     </div>
                   </div>
                 </div>
                 
                 <div className="flex items-center gap-2">
-                  <span className={`font-bold ${transaction.type === 'deposit' ? 'text-success' : 'text-destructive'}`}>
+                  <span className={`font-bold ${transaction.type === 'deposit' ? 'text-destructive' : 'text-success'}`}>
                     {transaction.type === 'deposit' ? '+' : '-'}R$ {Number(transaction.amount).toLocaleString('pt-BR')}
                   </span>
                   
@@ -260,7 +318,7 @@ const DayTransactionsModal = ({ date }: DayTransactionsModalProps) => {
           <div className="grid grid-cols-3 gap-4 text-sm">
             <div>
               <div className="text-muted-foreground">Depósitos</div>
-              <div className="font-bold text-success">
+              <div className="font-bold text-foreground">
                 R$ {dayTransactions
                   .filter((t: any) => t.type === 'deposit')
                   .reduce((acc: number, t: any) => acc + Number(t.amount), 0)
@@ -270,7 +328,7 @@ const DayTransactionsModal = ({ date }: DayTransactionsModalProps) => {
             </div>
             <div>
               <div className="text-muted-foreground">Saques</div>
-              <div className="font-bold text-destructive">
+              <div className="font-bold text-foreground">
                 R$ {dayTransactions
                   .filter((t: any) => t.type === 'withdraw')
                   .reduce((acc: number, t: any) => acc + Number(t.amount), 0)

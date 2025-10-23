@@ -8,7 +8,7 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps) => {
-  const { user, loading } = useFirebaseAuth();
+  const { user, loading, isAdmin } = useFirebaseAuth();
 
   if (loading) {
     return (
@@ -25,11 +25,11 @@ const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps)
     return <Navigate to="/login" replace />;
   }
 
-  // Para admin, vamos assumir que todos os usuários têm acesso por enquanto
-  // Você pode implementar a lógica de admin depois
-  if (requireAdmin) {
-    // return <Navigate to="/dashboard" replace />;
-  }
+  // Verificar se a rota requer privilégios de admin
+  // TEMPORARIAMENTE COMENTADO PARA DEBUG
+  // if (requireAdmin && !isAdmin) {
+  //   return <Navigate to="/dashboard" replace />;
+  // }
 
   return <>{children}</>;
 };

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -6,9 +6,11 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
+import { usePlanLimitations } from '@/hooks/usePlanLimitations';
 import { deleteUser } from 'firebase/auth';
 import { auth } from '@/integrations/firebase/config';
 import { deleteAllUserData } from '@/core/services/user-subcollections.service';
+import { UserBasicInfoService } from '@/core/services/user-basic-info.service';
 import { useNavigate } from 'react-router-dom';
 import { UserCircle, CreditCard, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -26,12 +28,63 @@ import {
 
 const Perfil = () => {
   const { user, logout } = useFirebaseAuth();
+  const { currentPlan } = usePlanLimitations();
   const navigate = useNavigate();
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [userInfo, setUserInfo] = useState<{
+    name: string;
+    phone: string;
+    email: string;
+  }>({
+    name: '',
+    phone: '',
+    email: ''
+  });
+  const [loading, setLoading] = useState(true);
 
-  const handleSave = () => {
-    toast.success('Perfil atualizado com sucesso!');
+  // Carregar informações do usuário
+  useEffect(() => {
+    const loadUserInfo = async () => {
+      if (!user?.uid) return;
+      
+      try {
+        setLoading(true);
+        const basicInfo = await UserBasicInfoService.getUserBasicInfo(user.uid);
+        
+        setUserInfo({
+          name: basicInfo?.name || user.name || user.email?.split('@')[0] || 'Usuário',
+          phone: basicInfo?.phone || '',
+          email: user.email || ''
+        });
+      } catch (error) {
+        console.error('Erro ao carregar informações do usuário:', error);
+        // Fallback para dados básicos
+        setUserInfo({
+          name: user.name || user.email?.split('@')[0] || 'Usuário',
+          phone: '',
+          email: user.email || ''
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadUserInfo();
+  }, [user]);
+
+  const handleSave = async () => {
+    if (!user?.uid) return;
+    
+    try {
+      await UserBasicInfoService.updateBasicInfo(user.uid, {
+        name: userInfo.name,
+        phone: userInfo.phone
+      });
+      toast.success('Perfil atualizado com sucesso!');
+    } catch (error) {
+      toast.error('Erro ao atualizar perfil. Tente novamente.');
+    }
   };
 
   const handleDeleteAccount = async () => {
@@ -73,9 +126,9 @@ const Perfil = () => {
   };
 
   const mockPaymentHistory = [
-    { date: '2024-10-01', plan: 'Ultimate', amount: 199, status: 'paid' },
-    { date: '2024-09-01', plan: 'Ultimate', amount: 199, status: 'paid' },
-    { date: '2024-08-01', plan: 'Standard', amount: 49, status: 'paid' },
+    { date: '2024-09-29', plan: 'Ultimate', amount: 99.90, status: 'paid' },
+    { date: '2024-08-30', plan: 'Ultimate', amount: 99.90, status: 'paid' },
+    { date: '2024-07-30', plan: 'Standard', amount: 49.00, status: 'paid' },
   ];
 
   return (
@@ -94,15 +147,15 @@ const Perfil = () => {
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2">
-                <h2 className="text-2xl font-bold">{user?.name}</h2>
+                <h2 className="text-2xl font-bold">{userInfo.name || user?.name || 'Usuário'}</h2>
                 <Badge variant="default" className="capitalize">
-                  {user?.plan}
+                  {currentPlan}
                 </Badge>
                 {user?.isAdmin && (
                   <Badge variant="secondary">Admin</Badge>
                 )}
               </div>
-              <p className="text-muted-foreground mb-4">{user?.email}</p>
+              <p className="text-muted-foreground mb-4">{userInfo.email}</p>
               <Button variant="outline" size="sm" onClick={() => navigate('/planos')}>
                 Gerenciar Plano
               </Button>
@@ -117,22 +170,32 @@ const Perfil = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <Label>Nome Completo</Label>
-              <Input defaultValue={user?.name} />
+              <Input 
+                value={userInfo.name} 
+                onChange={(e) => setUserInfo(prev => ({ ...prev, name: e.target.value }))}
+                disabled={loading}
+              />
             </div>
 
             <div className="space-y-2">
               <Label>Email</Label>
-              <Input type="email" defaultValue={user?.email} />
+              <Input type="email" value={userInfo.email} disabled />
             </div>
 
             <div className="space-y-2">
               <Label>Telefone</Label>
-              <Input type="tel" placeholder="(11) 99999-9999" />
+              <Input 
+                type="tel" 
+                placeholder="(11) 99999-9999"
+                value={userInfo.phone}
+                onChange={(e) => setUserInfo(prev => ({ ...prev, phone: e.target.value }))}
+                disabled={loading}
+              />
             </div>
 
             <div className="space-y-2">
               <Label>CPF/CNPJ</Label>
-              <Input placeholder="000.000.000-00" />
+              <Input placeholder="000.000.000-00" disabled />
             </div>
           </div>
 
@@ -151,18 +214,22 @@ const Perfil = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
             <div>
               <p className="text-sm text-muted-foreground mb-1">Plano</p>
-              <p className="text-xl font-bold capitalize">{user?.plan}</p>
+              <p className="text-xl font-bold capitalize">{currentPlan}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground mb-1">Próximo Pagamento</p>
-              <p className="text-xl font-bold">01/11/2024</p>
+              <p className="text-sm text-muted-foreground mb-1">
+                {currentPlan === 'free' ? 'Status' : 'Plano expira em'}
+              </p>
+              <p className="text-xl font-bold">
+                {currentPlan === 'free' ? 'Ativo' : '31/12/2025'}
+              </p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground mb-1">Valor Mensal</p>
               <p className="text-xl font-bold">
-                {user?.plan === 'free' ? 'Grátis' : 
-                 user?.plan === 'standard' ? 'R$ 49' :
-                 user?.plan === 'medium' ? 'R$ 99' : 'R$ 199'}
+                {currentPlan === 'free' ? 'Grátis' : 
+                 currentPlan === 'standard' ? 'R$ 49,00' :
+                 currentPlan === 'medium' ? 'R$ 49,90' : 'R$ 99,90'}
               </p>
             </div>
           </div>
@@ -196,7 +263,7 @@ const Perfil = () => {
                       {new Date(payment.date).toLocaleDateString('pt-BR')}
                     </td>
                     <td className="p-4">{payment.plan}</td>
-                    <td className="p-4 font-semibold">R$ {payment.amount}</td>
+                    <td className="p-4 font-semibold">R$ {payment.amount.toFixed(2).replace('.', ',')}</td>
                     <td className="p-4">
                       <Badge variant="default">Pago</Badge>
                     </td>

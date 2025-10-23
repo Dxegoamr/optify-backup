@@ -21,18 +21,18 @@ export const StatCard = ({ title, value, icon: Icon, trend, className, valueColo
   return (
     <Card 
       className={cn(
-        "p-6 card-hover relative overflow-hidden group hover:shadow-glow transition-all duration-300", 
+        "stat-card p-4 lg:p-6 card-hover relative overflow-hidden group hover:shadow-glow transition-all duration-300", 
         clickable && "cursor-pointer hover:scale-105 transition-transform",
         className
       )}
       onClick={onClick}
     >
       <div className="absolute inset-0 bg-gradient-primary opacity-0 group-hover:opacity-5 transition-opacity" />
-      <div className="flex items-start justify-between relative z-10">
-        <div className="space-y-3">
+      <div className="stat-card-content relative z-10">
+        <div className="stat-card-text">
           <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{title}</p>
           <p className={cn(
-            "text-4xl font-bold",
+            "text-3xl lg:text-4xl font-bold leading-tight",
             valueColor === 'positive' && "text-success",
             valueColor === 'negative' && "text-destructive",
             valueColor === 'default' && "text-foreground"
@@ -47,8 +47,8 @@ export const StatCard = ({ title, value, icon: Icon, trend, className, valueColo
             </div>
           )}
         </div>
-        <div className="p-4 bg-gradient-primary rounded-2xl shadow-glow">
-          <Icon className="h-7 w-7 text-primary-foreground" />
+        <div className="stat-card-icon p-3 lg:p-4 bg-gradient-primary rounded-2xl shadow-glow">
+          <Icon className="h-6 w-6 lg:h-7 lg:w-7 text-primary-foreground" />
         </div>
       </div>
     </Card>
