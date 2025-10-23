@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Search, Upload, TrendingUp, TrendingDown, ChevronRight, Users, TestTube, ArrowUpCircle, ArrowDownCircle, FileText, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Plus, Search, Upload, TrendingUp, TrendingDown, ChevronRight, Users, TestTube, ArrowUpCircle, ArrowDownCircle, FileText, CheckCircle, XCircle, AlertCircle, Lock } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
 import { useEmployees, useTransactions, useCreateEmployee } from '@/hooks/useFirestore';
@@ -20,7 +20,7 @@ const GestaoFuncionarios = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useFirebaseAuth();
-  const { canAddMoreEmployees, getEmployeeLimitForPlan } = usePlanLimitations();
+  const { canAddMoreEmployees, getEmployeeLimitForPlan, getAllowedEmployees, currentPlan } = usePlanLimitations();
   const [searchTerm, setSearchTerm] = useState('');
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importData, setImportData] = useState<any[]>([]);
@@ -46,8 +46,11 @@ const GestaoFuncionarios = () => {
   };
 
   // Buscar funcionários usando Firebase
-  const { data: employees = [], isLoading } = useEmployees(user?.uid || '');
+  const { data: allEmployees = [], isLoading } = useEmployees(user?.uid || '');
   const createEmployee = useCreateEmployee();
+  
+  // Filtrar funcionários baseado no plano
+  const employees = getAllowedEmployees(allEmployees);
 
   // Função para processar arquivo CSV
   const processCSVFile = (file: File) => {
@@ -521,44 +524,71 @@ const GestaoFuncionarios = () => {
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredEmployees.map((employee) => {
+            {filteredEmployees.map((employee, index) => {
               const profitLoss = getDayProfitLoss(employee);
               const isProfitable = profitLoss >= 0;
+              
+              // Verificar se o funcionário está bloqueado (plano free e não é o primeiro)
+              const isBlocked = currentPlan === 'free' && index > 0;
 
               return (
                 <Card
                   key={employee.id}
-                  className={`p-6 shadow-card card-hover cursor-pointer group transition-all duration-300 ${
+                  className={`p-6 shadow-card transition-all duration-300 ${
                     employee.status === 'inactive' 
                       ? 'opacity-60 grayscale-[0.3] border-dashed border-2 border-muted-foreground/30' 
-                      : ''
+                      : isBlocked
+                      ? 'opacity-50 cursor-not-allowed border-2 border-destructive/20'
+                      : 'card-hover cursor-pointer group'
                   }`}
-                  onClick={() => navigate(`/gestao-funcionarios/${employee.id}`)}
+                  onClick={() => {
+                    if (!isBlocked && employee.status === 'active') {
+                      navigate(`/gestao-funcionarios/${employee.id}`);
+                    }
+                  }}
                 >
                   <div className="space-y-4">
                     {/* Header */}
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <h3 className={`text-xl font-bold mb-1 group-hover:text-primary transition-colors ${
-                          employee.status === 'inactive' ? 'text-muted-foreground line-through' : ''
+                        <h3 className={`text-xl font-bold mb-1 transition-colors ${
+                          employee.status === 'inactive' 
+                            ? 'text-muted-foreground line-through' 
+                            : isBlocked
+                            ? 'text-muted-foreground'
+                            : 'group-hover:text-primary'
                         }`}>
                           {employee.name}
                         </h3>
-                        <p className={`text-sm ${employee.status === 'inactive' ? 'text-muted-foreground/70' : 'text-muted-foreground'}`}>
+                        <p className={`text-sm ${
+                          employee.status === 'inactive' 
+                            ? 'text-muted-foreground/70' 
+                            : isBlocked
+                            ? 'text-muted-foreground/70'
+                            : 'text-muted-foreground'
+                        }`}>
                           {employee.cpf}
                         </p>
                       </div>
-                      <Badge 
-                        variant={employee.status === 'active' ? 'default' : 'secondary'}
-                        className={employee.status === 'inactive' ? 'bg-red-500 hover:bg-red-600 text-white' : ''}
-                      >
-                        <div className="flex items-center gap-1">
-                          <div className={`w-2 h-2 rounded-full ${
-                            employee.status === 'active' ? 'bg-white' : 'bg-white'
-                          }`}></div>
-                          {employee.status === 'active' ? 'Ativo' : 'Inativo'}
-                        </div>
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        {isBlocked && (
+                          <div className="flex items-center gap-1 px-2 py-1 bg-destructive/10 rounded-md">
+                            <Lock className="h-3 w-3 text-destructive" />
+                            <span className="text-xs text-destructive font-medium">Bloqueado</span>
+                          </div>
+                        )}
+                        <Badge 
+                          variant={employee.status === 'active' ? 'default' : 'secondary'}
+                          className={employee.status === 'inactive' ? 'bg-red-500 hover:bg-red-600 text-white' : ''}
+                        >
+                          <div className="flex items-center gap-1">
+                            <div className={`w-2 h-2 rounded-full ${
+                              employee.status === 'active' ? 'bg-white' : 'bg-white'
+                            }`}></div>
+                            {employee.status === 'active' ? 'Ativo' : 'Inativo'}
+                          </div>
+                        </Badge>
+                      </div>
                     </div>
 
 
@@ -607,18 +637,25 @@ const GestaoFuncionarios = () => {
 
                     {/* Action Button */}
                     <div className="flex items-center justify-end pt-2">
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className={`gap-2 transition-all ${
-                          employee.status === 'inactive' 
-                            ? 'text-muted-foreground/70 hover:text-muted-foreground' 
-                            : 'group-hover:gap-3'
-                        }`}
-                      >
-                        Ver Detalhes
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
+                      {isBlocked ? (
+                        <div className="flex items-center gap-2 text-destructive text-sm">
+                          <Lock className="h-4 w-4" />
+                          <span>Faça upgrade para acessar</span>
+                        </div>
+                      ) : (
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className={`gap-2 transition-all ${
+                            employee.status === 'inactive' 
+                              ? 'text-muted-foreground/70 hover:text-muted-foreground' 
+                              : 'group-hover:gap-3'
+                          }`}
+                        >
+                          Ver Detalhes
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </Card>

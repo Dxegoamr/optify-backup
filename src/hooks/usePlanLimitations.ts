@@ -172,6 +172,26 @@ export const usePlanLimitations = () => {
     return canEditPreviousDays(currentPlan);
   };
 
+  // Função para obter funcionários permitidos baseado no plano
+  const getAllowedEmployees = (allEmployees: any[]) => {
+    if (!allEmployees || allEmployees.length === 0) return [];
+    
+    // Se o plano permite múltiplos funcionários, retorna todos
+    if (currentPlan !== 'free') {
+      return allEmployees;
+    }
+    
+    // Para plano free, retorna apenas o primeiro funcionário (mais antigo)
+    const sortedEmployees = [...allEmployees].sort((a, b) => {
+      // Ordenar por data de criação (mais antigo primeiro)
+      const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
+      const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
+      return dateA.getTime() - dateB.getTime();
+    });
+    
+    return sortedEmployees.slice(0, 1); // Apenas o primeiro
+  };
+
   const planInfo = getPlanInfo(currentPlan);
 
   const refreshPlan = () => {
@@ -190,6 +210,7 @@ export const usePlanLimitations = () => {
     getEmployeeLimitForPlan,
     canAccessPageRoute,
     canEditPreviousCalendarDays,
+    getAllowedEmployees,
     refreshPlan
   };
 };

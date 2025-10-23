@@ -36,16 +36,21 @@ const Login = () => {
   };
 
   const handleResetPassword = async () => {
+    console.log('🔵 handleResetPassword chamado!', { email: email.trim() });
+    
     if (!email.trim()) {
       toast.error('Digite seu e-mail para recuperar a senha');
       return;
     }
 
+    console.log('🟢 Enviando email de reset...');
     setResetLoading(true);
     try {
       await resetPassword(email);
       toast.success('E-mail de recuperação enviado! Verifique sua caixa de entrada.');
+      console.log('✅ Email enviado com sucesso!');
     } catch (error: any) {
+      console.error('❌ Erro ao enviar email:', error);
       if (error?.code === 'auth/user-not-found') {
         toast.error('E-mail não encontrado. Verifique se o e-mail está correto.');
       } else if (error?.code === 'auth/invalid-email') {
@@ -155,26 +160,29 @@ const Login = () => {
               'Entrar'
             )}
           </Button>
-
-          <div className="text-center">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={handleResetPassword}
-              disabled={resetLoading || !email.trim()}
-              className="text-sm text-muted-foreground hover:text-foreground"
-            >
-              {resetLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                  Enviando...
-                </>
-              ) : (
-                'Esqueci minha senha'
-              )}
-            </Button>
-          </div>
         </form>
+
+        <div className="text-center mt-4">
+          <button
+            type="button"
+            onClick={(e) => {
+              console.log('🟢 Botão clicado!');
+              e.preventDefault();
+              e.stopPropagation();
+              handleResetPassword();
+            }}
+            className="text-sm text-primary hover:text-primary/80 transition-colors underline font-medium px-2 py-1 rounded hover:bg-primary/10 cursor-pointer"
+          >
+            {resetLoading ? (
+              <>
+                <Loader2 className="mr-2 h-3 w-3 animate-spin inline" />
+                Enviando...
+              </>
+            ) : (
+              'Esqueci minha senha'
+            )}
+          </button>
+        </div>
 
         <div className="mt-6 text-center text-sm">
           <span className="text-muted-foreground">Não tem uma conta? </span>

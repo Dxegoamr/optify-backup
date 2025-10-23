@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { TrendingUp, TrendingDown, Calendar as CalendarIcon, ArrowUp, ArrowDown, Target, Trophy, Lock, Filter, X } from 'lucide-react';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
+import { usePlanLimitations } from '@/hooks/usePlanLimitations';
 import { useEmployees, useTransactions, usePlatforms, useDeleteTransaction } from '@/hooks/useFirestore';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { getCurrentDateInSaoPaulo, formatDateInSaoPaulo, getCurrentDateStringInSaoPaulo } from '@/utils/timezone';
@@ -22,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 const ResumoDia = () => {
   const { user } = useFirebaseAuth();
+  const { getAllowedEmployees } = usePlanLimitations();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -48,10 +50,13 @@ const ResumoDia = () => {
   }, [searchParams]);
   
   // Buscar dados do Firebase
-  const { data: employees = [] } = useEmployees(user?.uid || '');
+  const { data: allEmployees = [] } = useEmployees(user?.uid || '');
   const { data: platforms = [] } = usePlatforms(user?.uid || '');
   const { data: allTransactions = [] } = useTransactions(user?.uid || '');
   const deleteTransactionMutation = useDeleteTransaction();
+  
+  // Filtrar funcionários baseado no plano
+  const employees = getAllowedEmployees(allEmployees);
   
   // Buscar configuração do usuário (meta mensal)
   const { data: userConfig } = useQuery({

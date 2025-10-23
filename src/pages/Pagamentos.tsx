@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import { ProtectedPageContent } from '@/components/ProtectedPageContent';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -170,11 +171,16 @@ const Pagamentos = () => {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 animate-fade-in">
-        <div>
-          <h1 className="text-4xl font-bold mb-2">Pagamentos</h1>
-          <p className="text-muted-foreground">Gerencie os pagamentos dos funcionários</p>
-        </div>
+      <ProtectedPageContent 
+        requiredFeature="payments" 
+        featureName="Pagamentos"
+        requiredPlan="Medium"
+      >
+        <div className="space-y-6 animate-fade-in">
+          <div>
+            <h1 className="text-4xl font-bold mb-2">Pagamentos</h1>
+            <p className="text-muted-foreground">Gerencie os pagamentos dos funcionários</p>
+          </div>
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -333,7 +339,8 @@ const Pagamentos = () => {
           <Button variant="outline">Exportar</Button>
           <Button variant="success">Processar Pagamentos</Button>
         </div>
-      </div>
+        </div>
+      </ProtectedPageContent>
     </DashboardLayout>
   );
 };

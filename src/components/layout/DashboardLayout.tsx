@@ -91,6 +91,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     setSidebarOpen(false);
   };
 
+  // Mostrar TODAS as abas para todos os planos - limitação será na página
   const navItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', requiredFeature: 'dashboard' },
     { icon: Users, label: 'Funcionários', path: '/gestao-funcionarios', requiredFeature: 'dashboard' },
@@ -102,9 +103,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     { icon: Crown, label: 'Planos', path: '/planos', requiredFeature: 'dashboard' },
     // Afiliados - apenas para administradores (em fase de construção)
     ...((isAdmin || isAdminEmail(user?.email)) ? [{ icon: Gift, label: 'Afiliados', path: '/afiliados', requiredFeature: 'dashboard' }] : []),
-  ].filter(item => {
-    return canAccess(item.requiredFeature as any);
-  });
+  ]; // Removido o .filter() - todas as abas visíveis
 
   // Debug: Log admin status
   console.log('🔍 Admin Debug:', {

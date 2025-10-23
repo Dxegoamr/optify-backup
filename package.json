@@ -22,11 +22,13 @@
     "lighthouse:collect": "lhci collect",
     "lighthouse:assert": "lhci assert",
     "preview": "vite preview",
+    "start": "node server.js",
     "deploy": "chmod +x deploy.sh && ./deploy.sh",
     "deploy:staging": "chmod +x deploy.sh && ./deploy.sh staging",
     "deploy:production": "chmod +x deploy.sh && ./deploy.sh production"
   },
   "dependencies": {
+    "express": "^4.21.2",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-alert-dialog": "^1.1.14",

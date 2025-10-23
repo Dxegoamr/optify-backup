@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import jsPDF from 'jspdf';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import { ProtectedPageContent } from '@/components/ProtectedPageContent';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -1222,12 +1223,17 @@ const Relatorios = () => {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 animate-fade-in">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-4xl font-bold mb-2">Relatórios</h1>
-            <p className="text-muted-foreground">Análises e insights do seu negócio</p>
-          </div>
+      <ProtectedPageContent 
+        requiredFeature="reports" 
+        featureName="Relatórios Avançados"
+        requiredPlan="Standard"
+      >
+        <div className="space-y-6 animate-fade-in">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-4xl font-bold mb-2">Relatórios</h1>
+              <p className="text-muted-foreground">Análises e insights do seu negócio</p>
+            </div>
           <div className="flex gap-3">
             <Button 
               variant="outline" 
@@ -1910,6 +1916,7 @@ const Relatorios = () => {
         </div>
       </Card>
       </div>
+      </ProtectedPageContent>
     </DashboardLayout>
   );
 };

@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Trash2, TrendingUp, TrendingDown } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
+import { usePlanLimitations } from '@/hooks/usePlanLimitations';
 import { usePlatforms, useTransactions, useCreateTransaction, useDeleteTransaction, useEmployees } from '@/hooks/useFirestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -17,6 +18,7 @@ interface DayTransactionsModalProps {
 
 const DayTransactionsModal = ({ date }: DayTransactionsModalProps) => {
   const { user } = useFirebaseAuth();
+  const { getAllowedEmployees } = usePlanLimitations();
   const [depositAmount, setDepositAmount] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [depositPlatform, setDepositPlatform] = useState('none');
@@ -30,7 +32,10 @@ const DayTransactionsModal = ({ date }: DayTransactionsModalProps) => {
   const { data: platforms = [] } = usePlatforms(user?.uid || '');
   
   // Buscar funcionários
-  const { data: employees = [] } = useEmployees(user?.uid || '');
+  const { data: allEmployees = [] } = useEmployees(user?.uid || '');
+  
+  // Filtrar funcionários baseado no plano
+  const employees = getAllowedEmployees(allEmployees);
   
   // Buscar transações do dia
   const { data: allTransactions = [] } = useTransactions(user?.uid || '');

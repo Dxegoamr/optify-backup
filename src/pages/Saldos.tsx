@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import { ProtectedPageContent } from '@/components/ProtectedPageContent';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -299,12 +300,17 @@ const Saldos = () => {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 animate-fade-in">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-4xl font-bold mb-2">Saldos</h1>
-            <p className="text-muted-foreground">Gerencie contas e saldos por plataforma</p>
-          </div>
+      <ProtectedPageContent 
+        requiredFeature="balances" 
+        featureName="Saldos"
+        requiredPlan="Medium"
+      >
+        <div className="space-y-6 animate-fade-in">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-4xl font-bold mb-2">Saldos</h1>
+              <p className="text-muted-foreground">Gerencie contas e saldos por plataforma</p>
+            </div>
           <div className="flex gap-2">
             {activePlatforms.length === 0 && (
               <Button 
@@ -590,7 +596,8 @@ const Saldos = () => {
             </table>
           </div>
         </Card>
-      </div>
+        </div>
+      </ProtectedPageContent>
     </DashboardLayout>
   );
 };

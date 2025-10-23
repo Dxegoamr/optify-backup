@@ -10,7 +10,6 @@ import {
   executarConsultaSaldo,
   executarListaFuncionarios
 } from './executors';
-import * as cors from 'cors';
 
 // System prompt otimizado - IA Geral + Especialista Optify
 const SYSTEM_PROMPT = `Você é um assistente virtual inteligente e versátil. Você pode:
@@ -288,6 +287,8 @@ export const generateAIResponse = onCall<GenerateResponseRequest>(
         throw new HttpsError('internal', 'Erro de autenticação com OpenAI API');
       }
 
+      // Erro genérico
+      throw new HttpsError('internal', 'Erro interno do servidor');
     }
   }
 );
@@ -297,17 +298,6 @@ export const generateAIResponse = onCall<GenerateResponseRequest>(
  */
 export const generateAIResponseHTTP = onRequest(
   {
-    cors: {
-      origin: [
-        'https://optify.host',
-        'https://optify-definitivo.web.app',
-        'https://optify-definitivo.firebaseapp.com',
-        'http://localhost:8080',
-        'http://localhost:8081'
-      ],
-      methods: ['GET', 'POST', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization']
-    },
     memory: '256MiB',
     timeoutSeconds: 60,
     region: 'us-central1',

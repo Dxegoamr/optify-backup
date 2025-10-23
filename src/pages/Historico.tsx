@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import { ProtectedPageContent } from '@/components/ProtectedPageContent';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -77,14 +78,19 @@ const Historico = () => {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Histórico de Fechamentos</h1>
-            <p className="text-muted-foreground mt-2">
-              Visualize o histórico de todos os fechamentos de dia.
-            </p>
+      <ProtectedPageContent 
+        requiredFeature="history" 
+        featureName="Histórico Completo"
+        requiredPlan="Medium"
+      >
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-foreground">Histórico de Fechamentos</h1>
+              <p className="text-muted-foreground mt-2">
+                Visualize o histórico de todos os fechamentos de dia.
+              </p>
           </div>
           <Button onClick={handleExportToPDF} className="gap-2">
             <Download className="h-4 w-4" />
@@ -392,6 +398,7 @@ const Historico = () => {
           </DialogContent>
         </Dialog>
       </div>
+      </ProtectedPageContent>
     </DashboardLayout>
   );
 };
