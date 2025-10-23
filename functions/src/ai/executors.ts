@@ -327,7 +327,7 @@ export async function executarConsultaSaldo(
     const { funcionario_nome, periodo } = params;
 
     // Definir range de data baseado no período
-    let dataInicio = new Date();
+    const dataInicio = new Date();
     if (periodo === 'hoje') {
       dataInicio.setHours(0, 0, 0, 0);
     } else if (periodo === 'semana') {
@@ -338,7 +338,7 @@ export async function executarConsultaSaldo(
       dataInicio.setFullYear(dataInicio.getFullYear() - 1);
     }
 
-    let query = db
+    const query = db
       .collection('users')
       .doc(userId)
       .collection('transactions')

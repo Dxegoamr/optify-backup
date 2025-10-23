@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import jsPDF from 'jspdf';
+import { Timestamp } from 'firebase/firestore';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { ProtectedPageContent } from '@/components/ProtectedPageContent';
 import { Card } from '@/components/ui/card';
@@ -13,6 +14,17 @@ import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
 import { useEmployees, useTransactions, usePlatforms, useAllDailySummaries } from '@/hooks/useFirestore';
 import { toast } from 'sonner';
 import { getCurrentDateStringInSaoPaulo, getCurrentDateInSaoPaulo } from '@/utils/timezone';
+
+// Função auxiliar para converter Timestamp para Date
+const toDate = (timestamp: Timestamp | Date | any): Date => {
+  if (timestamp instanceof Timestamp) {
+    return timestamp.toDate();
+  }
+  if (timestamp instanceof Date) {
+    return timestamp;
+  }
+  return new Date(timestamp);
+};
 
 const Relatorios = () => {
   const { user } = useFirebaseAuth();
@@ -86,7 +98,7 @@ const Relatorios = () => {
       
       // Filtrar transações do dia específico
       const dayTransactions = recentTransactions.filter(t => {
-        const transactionDate = new Date(t.createdAt?.toDate?.() || t.createdAt).toISOString().split('T')[0];
+        const transactionDate = toDate(t.createdAt).toISOString().split('T')[0];
         return transactionDate === dateString;
       });
       
@@ -1829,7 +1841,11 @@ const Relatorios = () => {
           {(() => {
             return filteredTransactions.length > 0 ? (
               filteredTransactions
-                .sort((a, b) => new Date(b.createdAt?.toDate?.() || b.createdAt).getTime() - new Date(a.createdAt?.toDate?.() || a.createdAt).getTime())
+                .sort((a, b) => {
+                  const dateA = toDate(a.createdAt);
+                  const dateB = toDate(b.createdAt);
+                  return dateB.getTime() - dateA.getTime();
+                })
                 .map((transaction) => {
                   const employee = employees.find(emp => emp.id === transaction.employeeId);
                   
@@ -1862,7 +1878,7 @@ const Relatorios = () => {
                           {transaction.type === 'withdraw' ? '+' : '-'}R$ {Number(transaction.amount || 0).toLocaleString('pt-BR')}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {new Date(transaction.createdAt?.toDate?.() || transaction.createdAt).toLocaleDateString('pt-BR', {
+                          {toDate(transaction.createdAt).toLocaleDateString('pt-BR', {
                             day: '2-digit',
                             month: '2-digit',
                             year: 'numeric',

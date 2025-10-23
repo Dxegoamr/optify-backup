@@ -238,7 +238,7 @@ jobs:
   # Job de notificação
   notify:
     runs-on: ubuntu-latest
-    needs: [deploy-production]
+    needs: [quality, build]
     if: always()
     steps:
       - name: Notify deployment status
