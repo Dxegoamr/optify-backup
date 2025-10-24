@@ -117,6 +117,11 @@ export const createPaymentPreference = functions.https.onRequest(async (req, res
         currency_id: 'BRL',
         unit_price: amount,
       }],
+      payment_methods: {
+        excluded_payment_methods: [],
+        excluded_payment_types: [],
+        installments: 12
+      },
       back_urls: {
         success: `${BASE_URL_FRONTEND}/payment/success`,
         failure: `${BASE_URL_FRONTEND}/payment/failure`,
@@ -184,7 +189,7 @@ export const createPaymentPreference = functions.https.onRequest(async (req, res
 
 export const mercadoPagoWebhook = functions.https.onRequest(async (req, res): Promise<void> => {
   // Carregar variáveis de ambiente obrigatórias
-  const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+  const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN || 'APP_USR-5496244105993399-070119-b9bec860fcf72e513a288bf609f3700c-454772336';
   
   if (!MP_ACCESS_TOKEN) {
     console.error('MERCADO_PAGO_ACCESS_TOKEN não configurado');
@@ -361,7 +366,7 @@ export const mercadoPagoWebhook = functions.https.onRequest(async (req, res): Pr
 // ---------- 3. checkPaymentStatus ----------
 export const checkPaymentStatus = functions.https.onRequest(async (req, res): Promise<void> => {
   // Carregar variáveis de ambiente obrigatórias
-  const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+  const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN || 'APP_USR-5496244105993399-070119-b9bec860fcf72e513a288bf609f3700c-454772336';
   
   if (!MP_ACCESS_TOKEN) {
     console.error('MERCADO_PAGO_ACCESS_TOKEN não configurado');
