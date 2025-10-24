@@ -70,8 +70,8 @@ export const createPaymentPreference = functions.https.onRequest(async (req, res
 
   try {
     // Carregar variáveis de ambiente obrigatórias
-    const MP_ACCESS_TOKEN = functions.config().mercadopago?.access_token || process.env.MERCADO_PAGO_ACCESS_TOKEN || 'APP_USR-5496244105993399-070119-b9bec860fcf72e513a288bf609f3700c-454772336';
-    const BASE_URL_FRONTEND = functions.config().app?.base_url_frontend || process.env.BASE_URL_FRONTEND || 'https://optify.host';
+    const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN || 'APP_USR-5496244105993399-070119-b9bec860fcf72e513a288bf609f3700c-454772336';
+    const BASE_URL_FRONTEND = process.env.BASE_URL_FRONTEND || 'https://optify.host';
     
     console.log('🔍 Debug - Configuração:', {
       hasToken: !!MP_ACCESS_TOKEN,
