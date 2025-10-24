@@ -73,6 +73,12 @@ export const createPaymentPreference = functions.https.onRequest(async (req, res
     const MP_ACCESS_TOKEN = functions.config().mercadopago?.access_token || process.env.MERCADO_PAGO_ACCESS_TOKEN || 'APP_USR-5496244105993399-070119-b9bec860fcf72e513a288bf609f3700c-454772336';
     const BASE_URL_FRONTEND = functions.config().app?.base_url_frontend || process.env.BASE_URL_FRONTEND || 'https://optify.host';
     
+    console.log('🔍 Debug - Configuração:', {
+      hasToken: !!MP_ACCESS_TOKEN,
+      hasBaseUrl: !!BASE_URL_FRONTEND,
+      baseUrl: BASE_URL_FRONTEND
+    });
+    
     if (!MP_ACCESS_TOKEN || !BASE_URL_FRONTEND) {
       console.error('Configuração do servidor incompleta:', {
         hasToken: !!MP_ACCESS_TOKEN,
@@ -91,9 +97,12 @@ export const createPaymentPreference = functions.https.onRequest(async (req, res
     }
 
     const { userId, userEmail, userName, planId, billingType } = req.body;
+    console.log('🔍 Debug - Payload recebido:', { userId, userEmail, userName, planId, billingType });
+    
     const plan = PLANOS[planId as PlanId];
     
     if (!plan) {
+      console.error('❌ Plano inválido:', planId);
       res.status(400).json({ error: 'Plano inválido' });
       return;
     }
@@ -119,6 +128,7 @@ export const createPaymentPreference = functions.https.onRequest(async (req, res
       notification_url: 'https://us-central1-optify-definitivo.cloudfunctions.net/mercadoPagoWebhook',
     };
 
+    console.log('🔍 Debug - Chamando API do Mercado Pago...');
     const resp = await fetch(`${MP_API}/checkout/preferences`, {
       method: 'POST',
       headers: {
@@ -129,9 +139,12 @@ export const createPaymentPreference = functions.https.onRequest(async (req, res
       body: JSON.stringify(prefBody),
     });
 
+    console.log('🔍 Debug - Status da resposta MP:', resp.status);
     const data = await resp.json();
+    console.log('🔍 Debug - Resposta MP:', JSON.stringify(data).substring(0, 200));
     
     if (!resp.ok) {
+      console.error('❌ Erro do Mercado Pago:', data);
       res.status(500).json({ error: data });
       return;
     }
@@ -149,8 +162,13 @@ export const createPaymentPreference = functions.https.onRequest(async (req, res
     });
     return;
   } catch (err: any) {
-    console.error('Erro na função createPaymentPreference:', err);
-    res.status(500).json({ error: 'Internal Server Error' });
+    console.error('❌ Erro na função createPaymentPreference:', err);
+    console.error('❌ Stack:', err.stack);
+    res.status(500).json({ 
+      error: 'Internal Server Error',
+      message: err.message || 'Erro desconhecido',
+      details: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
     return;
   }
 });
