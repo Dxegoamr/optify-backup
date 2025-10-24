@@ -262,6 +262,10 @@ export const grantAdmin = functions.https.onRequest(async (req, res) => {
     res.status(500).json({ error: 'Erro interno' });
   }
 });
+
+// Export Mercado Pago functions
+export * from './mercadopago';
+
 // export const helloWorld = onRequest((request, response) => {
 //   logger.info("Hello logs!", {structuredData: true});
 //   response.send("Hello from Firebase!");
