@@ -219,18 +219,23 @@ export const createPaymentPreference = onRequest(
 // }
 
 export const mercadoPagoWebhook = onRequest(
-  { cors: true, memory: '256MiB', timeoutSeconds: 60 },
+  { 
+    cors: true, 
+    memory: '256MiB', 
+    timeoutSeconds: 60,
+    secrets: ['MERCADO_PAGO_ACCESS_TOKEN']
+  },
   async (req, res): Promise<void> => {
-  // Carregar variáveis de ambiente - Firebase Functions v2 usa process.env diretamente
-  const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN || 'APP_USR-5496244105993399-070119-b9bec860fcf72e513a288bf609f3700c-454772336';
-  
-  if (!MP_ACCESS_TOKEN) {
-    console.error('MERCADO_PAGO_ACCESS_TOKEN não configurado');
-    res.status(500).json({ error: 'Configuração do servidor incompleta' });
-    return;
-  }
-
   try {
+    // Carregar variáveis de ambiente - Firebase Functions v2
+    const MP_ACCESS_TOKEN = (process.env.MERCADO_PAGO_ACCESS_TOKEN || '').trim();
+    
+    if (!MP_ACCESS_TOKEN) {
+      console.error('❌ MERCADO_PAGO_ACCESS_TOKEN não configurado');
+      res.status(500).json({ error: 'Configuração do servidor incompleta' });
+      return;
+    }
+
     const { type, data, action } = req.body;
     console.log('📋 Webhook recebido:', req.body);
 
@@ -295,24 +300,32 @@ export const mercadoPagoWebhook = onRequest(
         }
       }
 
-      // Extrair dados da transação ou do metadata (prioridade: transação > metadata)
+      // Extrair email (prioridade: transactionData > metadata > payer)
       const email = (
         transactionData?.userEmail ||
+        paymentData?.metadata?.email ||
         paymentData?.metadata?.userEmail ||
         paymentData?.metadata?.user_email ||
         paymentData?.payer?.email ||
         ''
       )
-        .toString()
+        ?.toString()
         .trim()
         .toLowerCase() || null;
       
-      const planId = transactionData?.planId || paymentData?.metadata?.planId || paymentData?.metadata?.plan_id || 'standard';
-      const billingType = transactionData?.billingType || paymentData?.metadata?.billingType || paymentData?.metadata?.billing_type || 'monthly';
+      // Extrair plano e período (prioridade: transactionData > metadata)
+      // Converter billingType para periodo (mensal/anual)
+      const planIdRaw = transactionData?.planId || paymentData?.metadata?.planId || paymentData?.metadata?.plan_id || paymentData?.metadata?.plano || 'standard';
+      const billingTypeRaw = transactionData?.billingType || paymentData?.metadata?.billingType || paymentData?.metadata?.billing_type || paymentData?.metadata?.periodo || 'monthly';
+      
+      // Normalizar planId
+      const planId = (planIdRaw || '').toLowerCase().trim();
+      // Converter billingType para periodo (compatibilidade)
+      const periodo = billingTypeRaw === 'annual' || billingTypeRaw === 'anual' ? 'anual' : 'mensal';
 
       console.log('📧 Email:', email);
-      console.log('📦 Plano:', planId, transactionData ? '(da transação)' : '(do metadata)');
-      console.log('📅 Período:', billingType);
+      console.log('📦 Plano (raw):', planIdRaw, '-> (normalizado):', planId);
+      console.log('📅 Período (raw):', billingTypeRaw, '-> (normalizado):', periodo);
       console.log('✅ Status:', status);
 
       if (!email) {
@@ -324,24 +337,23 @@ export const mercadoPagoWebhook = onRequest(
       if (status === 'approved') {
         console.log('✅ Pagamento aprovado! Atualizando plano do usuário...');
         
-        // Normalizar e validar planId
-        const normalizedPlanId = (planId || '').toLowerCase().trim();
-        if (!PLANOS[normalizedPlanId as PlanId]) {
-          console.error(`❌ Plano inválido: "${planId}" (normalizado: "${normalizedPlanId}")`);
+        // Validar planId
+        if (!PLANOS[planId as PlanId]) {
+          console.error(`❌ Plano inválido: "${planIdRaw}" (normalizado: "${planId}")`);
           console.error(`Planos válidos: ${Object.keys(PLANOS).join(', ')}`);
-          res.status(500).json({ error: `Plano inválido: ${planId}` });
+          res.status(500).json({ error: `Plano inválido: ${planIdRaw}` });
           return;
         }
         
-        const plan = PLANOS[normalizedPlanId as PlanId];
-        console.log(`✅ Usando plano normalizado: ${normalizedPlanId} (original: ${planId})`);
+        const plan = PLANOS[planId as PlanId];
+        console.log(`✅ Usando plano: ${planId}`);
         
         // 🔢 Calcula data de expiração
         const startDate = new Date();
         const endDate = new Date(startDate);
-        if (billingType === 'monthly') {
+        if (periodo === 'mensal' || billingTypeRaw === 'monthly') {
           endDate.setMonth(endDate.getMonth() + 1);
-        } else if (billingType === 'annual') {
+        } else if (periodo === 'anual' || billingTypeRaw === 'annual') {
           endDate.setFullYear(endDate.getFullYear() + 1);
         }
 
@@ -361,42 +373,43 @@ export const mercadoPagoWebhook = onRequest(
           return;
         }
 
+        // Dados de atualização seguindo o formato que funcionava
         const userUpdateData = {
-          email,
-          plano: normalizedPlanId,
-          periodo: billingType,
+          email: email.toLowerCase(),
+          plano: planId,
+          periodo: periodo,
           isActive: true,
           isSubscriber: true,
           subscription: {
-            plan: normalizedPlanId,
-            period: billingType,
+            plan: planId,
+            period: periodo,
             active: true,
-            updatedAt: new Date(),
-            expiresAt: endDate,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            expiresAt: admin.firestore.Timestamp.fromDate(endDate),
           },
-          subscriptionStartDate: startDate,
-          subscriptionEndDate: endDate,
+          subscriptionStartDate: admin.firestore.Timestamp.fromDate(startDate),
+          subscriptionEndDate: admin.firestore.Timestamp.fromDate(endDate),
           funcionariosPermitidos: plan.max_funcionarios,
-          atualizadoEm: new Date(),
+          atualizadoEm: admin.firestore.FieldValue.serverTimestamp(),
         };
 
         if (!usersSnap.empty) {
-          // Atualiza TODOS os documentos que possuem o mesmo email
+          // Atualiza TODOS os documentos que possuem o mesmo email (evita duplicidade de estado)
           try {
             const batch = db.batch();
-            usersSnap.docs.forEach((docRef: FirebaseFirestore.QueryDocumentSnapshot) => {
+            usersSnap.docs.forEach((docRef) => {
               batch.set(docRef.ref, userUpdateData, { merge: true });
               console.log('📝 Atualizando documento:', docRef.id);
             });
             await batch.commit();
-            console.log(`✅ Usuário ${email} atualizado para plano ${planId} (${billingType}) até ${endDate.toISOString()}`);
+            console.log(`✅ Usuário ${email} atualizado para plano ${planId} (${periodo}) até ${endDate.toISOString()}`);
           } catch (error) {
             console.error('❌ Erro ao atualizar usuário:', error);
             res.status(500).json({ error: 'Erro ao atualizar usuário' });
             return;
           }
         } else {
-          console.warn(`⚠️ Nenhum documento encontrado para email ${email}`);
+          console.warn(`⚠️ Nenhum documento encontrado para email ${email}. Assinatura registrada sem vínculo de usuário.`);
         }
       } else {
         console.log(`📢 Pagamento não aprovado (status: ${status})`);
