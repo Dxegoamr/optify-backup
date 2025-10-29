@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle, XCircle, Clock, ArrowLeft, RefreshCw, Sparkles } from "lucide-react";
 import { useFirebaseAuth } from "@/contexts/FirebaseAuthContext";
 import { UserProfileService } from "@/core/services/user-profile.service";
+import { env } from "@/config/env";
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '@/integrations/firebase/config';
 
 export default function PaymentResult({ mode }: { mode: "success" | "failure" | "pending" }) {
   const [params] = useSearchParams();
@@ -39,16 +42,45 @@ export default function PaymentResult({ mode }: { mode: "success" | "failure" | 
     
     setCheckingStatus(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/checkPaymentStatus?paymentId=${paymentId}`);
+      const apiUrl = env.API_URL || 'https://us-central1-optify-definitivo.cloudfunctions.net';
+      const url = `${apiUrl}/checkPaymentStatus?paymentId=${paymentId}`;
+      
+      console.log('🔍 Verificando status do pagamento:', url);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      // Verificar se a resposta é JSON antes de fazer parse
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('❌ Resposta não é JSON:', text.substring(0, 200));
+        throw new Error(`Resposta inválida: ${response.status} ${response.statusText}`);
+      }
+
+      if (!response.ok) {
+        throw new Error(`Erro HTTP: ${response.status} ${response.statusText}`);
+      }
+
       const paymentData = await response.json();
+      console.log('✅ Status do pagamento recebido:', paymentData?.status);
       setData(paymentData);
       
       // Se o pagamento foi aprovado, atualizar o modo
       if (paymentData?.status === 'approved') {
         setCurrentMode('success');
+        // Recarregar perfil do usuário para ver plano atualizado
+        if (user?.uid) {
+          await fetchUserProfile();
+        }
       }
-    } catch (error) {
-      console.error('Erro ao verificar status:', error);
+    } catch (error: any) {
+      console.error('❌ Erro ao verificar status:', error);
+      // Não definir erro fatal, apenas logar
     } finally {
       setCheckingStatus(false);
     }
@@ -61,9 +93,54 @@ export default function PaymentResult({ mode }: { mode: "success" | "failure" | 
     }
   }, [user?.uid]);
 
-  // Monitorar mudanças no plano do usuário
+  // Listener em tempo real para mudanças no plano do usuário via Firestore
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    console.log('👂 Iniciando listener do Firestore para plano do usuário');
+    
+    const userRef = doc(db, 'users', user.uid);
+    const unsubscribe = onSnapshot(
+      userRef,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const userData = snapshot.data();
+          const newPlan = userData?.plano || userData?.plan || 'free';
+          const previousPlan = userInfo?.plano || 'free';
+          
+          console.log('📊 Plano atualizado no Firestore:', {
+            previousPlan,
+            newPlan,
+            isSubscriber: userData?.isSubscriber,
+            isActive: userData?.isActive
+          });
+
+          setUserInfo(userData);
+
+          // Se o plano mudou e não é mais 'free', atualizar para success
+          if (newPlan !== 'free' && newPlan !== previousPlan && currentMode === 'pending') {
+            console.log('✅ Plano ativado! Mudando para success');
+            setCurrentMode('success');
+            // Forçar recarregamento do perfil
+            fetchUserProfile();
+          }
+        }
+      },
+      (error) => {
+        console.error('❌ Erro no listener do Firestore:', error);
+      }
+    );
+
+    return () => {
+      console.log('🔇 Removendo listener do Firestore');
+      unsubscribe();
+    };
+  }, [user?.uid, currentMode]);
+
+  // Monitorar mudanças no plano do usuário (fallback)
   useEffect(() => {
     if (userInfo?.plano && userInfo.plano !== 'free' && currentMode === 'pending') {
+      console.log('✅ Plano detectado! Mudando para success');
       setCurrentMode('success');
     }
   }, [userInfo?.plano, currentMode]);
