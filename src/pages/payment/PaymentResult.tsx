@@ -16,7 +16,7 @@ export default function PaymentResult({ mode }: { mode: "success" | "failure" | 
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [userInfo, setUserInfo] = useState<any>(null);
   const [showAnimation, setShowAnimation] = useState(false);
-  const [showContent, setShowContent] = useState(false);
+  const [showContent, setShowContent] = useState(mode !== 'pending'); // Mostrar conteúdo imediatamente se não for pending
   
   // Hook para obter informações do usuário autenticado
   const { user } = useFirebaseAuth();
@@ -75,7 +75,8 @@ export default function PaymentResult({ mode }: { mode: "success" | "failure" | 
       setTimeout(() => {
         setShowContent(true);
       }, 1500); // Mostrar conteúdo após 1.5s de animação
-    } else if (currentMode === 'success') {
+    } else {
+      // Mostrar conteúdo imediatamente para outros modos (pending, failure)
       setShowContent(true);
     }
   }, [currentMode, mode]);

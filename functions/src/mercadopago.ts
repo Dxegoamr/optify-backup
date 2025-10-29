@@ -417,28 +417,53 @@ export const mercadoPagoWebhook = onRequest(
 
 // ---------- 3. checkPaymentStatus ----------
 export const checkPaymentStatus = onRequest(
-  { cors: true, memory: '256MiB', timeoutSeconds: 60 },
+  { 
+    cors: true, 
+    memory: '256MiB', 
+    timeoutSeconds: 60,
+    secrets: ['MERCADO_PAGO_ACCESS_TOKEN']
+  },
   async (req, res): Promise<void> => {
-  // Carregar variáveis de ambiente - Firebase Functions v2 usa process.env diretamente
-  const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN || 'APP_USR-5496244105993399-070119-b9bec860fcf72e513a288bf609f3700c-454772336';
-  
-  if (!MP_ACCESS_TOKEN) {
-    console.error('MERCADO_PAGO_ACCESS_TOKEN não configurado');
-    res.status(500).json({ error: 'Configuração do servidor incompleta' });
-    return;
-  }
-
   try {
-    const paymentId = req.query.paymentId;
+    // Carregar variáveis de ambiente - Firebase Functions v2
+    const MP_ACCESS_TOKEN = (process.env.MERCADO_PAGO_ACCESS_TOKEN || '').trim();
+    
+    if (!MP_ACCESS_TOKEN) {
+      console.error('❌ MERCADO_PAGO_ACCESS_TOKEN não configurado');
+      res.status(500).json({ error: 'Configuração do servidor incompleta' });
+      return;
+    }
+
+    const paymentId = req.query.paymentId as string;
+    
+    if (!paymentId) {
+      res.status(400).json({ error: 'paymentId é obrigatório' });
+      return;
+    }
+
+    console.log('🔍 Verificando status do pagamento:', paymentId);
+    
     const resp = await fetch(`${MP_API}/v1/payments/${paymentId}`, {
-      headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` },
+      headers: { 
+        'Authorization': `Bearer ${MP_ACCESS_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
     });
+    
+    if (!resp.ok) {
+      console.error('❌ Erro ao buscar pagamento:', resp.status);
+      res.status(resp.status).json({ error: 'Erro ao buscar pagamento' });
+      return;
+    }
+    
     const data = await resp.json();
+    console.log('✅ Status do pagamento:', data.status);
+    
     res.json(data);
     return;
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Internal error' });
+  } catch (err: any) {
+    console.error('❌ Erro em checkPaymentStatus:', err);
+    res.status(500).json({ error: 'Internal error', message: err.message });
     return;
   }
   }
