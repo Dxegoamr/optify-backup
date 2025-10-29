@@ -1,6 +1,6 @@
 import fetch from 'node-fetch';
 import * as crypto from 'crypto';
-import * as functions from 'firebase-functions';
+import { onRequest } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 
 if (!admin.apps.length) admin.initializeApp();
@@ -55,31 +55,37 @@ async function createPlanTransaction(data: any) {
 // }
 
 // ---------- 1. createPaymentPreference ----------
-export const createPaymentPreference = functions.https.onRequest(async (req, res): Promise<void> => {
-  // Configurar CORS primeiro
-  res.set('Access-Control-Allow-Origin', '*');
-  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.set('Access-Control-Max-Age', '3600');
-
-  // Responder a requisições OPTIONS (preflight)
-  if (req.method === 'OPTIONS') {
-    res.status(204).send('');
-    return;
-  }
+export const createPaymentPreference = onRequest(
+  { 
+    cors: true, 
+    memory: '256MiB', 
+    timeoutSeconds: 60,
+    secrets: ['MERCADO_PAGO_ACCESS_TOKEN', 'BASE_URL_FRONTEND']
+  },
+  async (req, res): Promise<void> => {
 
   try {
-    // Carregar variáveis de ambiente obrigatórias
-    const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN || 'APP_USR-5496244105993399-070119-b9bec860fcf72e513a288bf609f3700c-454772336';
-    const BASE_URL_FRONTEND = process.env.BASE_URL_FRONTEND || 'https://optify.host';
+    // Carregar variáveis de ambiente - Firebase Functions v2
+    const MP_ACCESS_TOKEN = (process.env.MERCADO_PAGO_ACCESS_TOKEN || '').trim();
+    const BASE_URL_FRONTEND = (process.env.BASE_URL_FRONTEND || 'https://optify.host').trim();
     
     console.log('🔍 Debug - Configuração:', {
       hasToken: !!MP_ACCESS_TOKEN,
+      tokenLength: MP_ACCESS_TOKEN.length,
       hasBaseUrl: !!BASE_URL_FRONTEND,
       baseUrl: BASE_URL_FRONTEND
     });
     
-    if (!MP_ACCESS_TOKEN || !BASE_URL_FRONTEND) {
+    if (!MP_ACCESS_TOKEN) {
+      console.error('❌ Token do Mercado Pago não configurado');
+      res.status(500).json({ 
+        error: 'Configuração incompleta',
+        message: 'Token do Mercado Pago não está configurado'
+      });
+      return;
+    }
+    
+    if (!BASE_URL_FRONTEND) {
       console.error('Configuração do servidor incompleta:', {
         hasToken: !!MP_ACCESS_TOKEN,
         hasBaseUrl: !!BASE_URL_FRONTEND,
@@ -130,7 +136,12 @@ export const createPaymentPreference = functions.https.onRequest(async (req, res
       auto_return: 'approved',
       external_reference,
       metadata: { userId, userEmail, planId, billingType },
-      notification_url: 'https://us-central1-optify-definitivo.cloudfunctions.net/mercadoPagoWebhook',
+      notification_url: `https://us-central1-optify-definitivo.cloudfunctions.net/mercadoPagoWebhook`,
+      statement_descriptor: 'OPTIFY',
+      payer: {
+        name: userName,
+        email: userEmail,
+      },
     };
 
     console.log('🔍 Debug - Chamando API do Mercado Pago...');
@@ -160,10 +171,29 @@ export const createPaymentPreference = functions.https.onRequest(async (req, res
       externalReference: external_reference,
     });
 
+    console.log('🔍 Debug - URLs retornadas:', {
+      init_point: data.init_point,
+      sandbox_init_point: data.sandbox_init_point,
+      id: data.id
+    });
+
+    // Garantir que sempre retornamos uma URL de checkout
+    const checkoutUrl = data.init_point || data.sandbox_init_point;
+    
+    if (!checkoutUrl) {
+      console.error('❌ Nenhuma URL de checkout disponível');
+      res.status(500).json({ 
+        error: 'URL de checkout não disponível',
+        details: data 
+      });
+      return;
+    }
+
     res.json({
       init_point: data.init_point,
       sandbox_init_point: data.sandbox_init_point,
       id: data.id,
+      checkout_url: checkoutUrl,
     });
     return;
   } catch (err: any) {
@@ -176,7 +206,8 @@ export const createPaymentPreference = functions.https.onRequest(async (req, res
     });
     return;
   }
-});
+  }
+);
 
 // ---------- 2. mercadoPagoWebhook ----------
 // Verificação de assinatura desabilitada temporariamente para debug
@@ -187,8 +218,10 @@ export const createPaymentPreference = functions.https.onRequest(async (req, res
 //   return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
 // }
 
-export const mercadoPagoWebhook = functions.https.onRequest(async (req, res): Promise<void> => {
-  // Carregar variáveis de ambiente obrigatórias
+export const mercadoPagoWebhook = onRequest(
+  { cors: true, memory: '256MiB', timeoutSeconds: 60 },
+  async (req, res): Promise<void> => {
+  // Carregar variáveis de ambiente - Firebase Functions v2 usa process.env diretamente
   const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN || 'APP_USR-5496244105993399-070119-b9bec860fcf72e513a288bf609f3700c-454772336';
   
   if (!MP_ACCESS_TOKEN) {
@@ -239,33 +272,11 @@ export const mercadoPagoWebhook = functions.https.onRequest(async (req, res): Pr
       console.log('🔍 Payer:', paymentData?.payer);
       console.log('🔍 External Reference:', paymentData?.external_reference);
 
-      const email = (
-        paymentData?.metadata?.user_email ||
-        paymentData?.metadata?.userEmail ||
-        paymentData?.payer?.email ||
-        ''
-      )
-        .toString()
-        .trim()
-        .toLowerCase() || null;
-      
-      const planId = paymentData?.metadata?.plan_id || paymentData?.metadata?.planId || 'standard';
-      const billingType = paymentData?.metadata?.billing_type || paymentData?.metadata?.billingType || 'monthly';
       const status = paymentData?.status;
       const externalReference = paymentData?.external_reference;
 
-      console.log('📧 Email:', email);
-      console.log('📦 Plano:', planId);
-      console.log('📅 Período:', billingType);
-      console.log('✅ Status:', status);
-
-      if (!email) {
-        console.log('⚠️ Pagamento sem email, não é possível atualizar usuário.');
-        res.status(200).json({ ok: true });
-        return;
-      }
-
-      // 🔄 Atualiza transação
+      // Buscar dados da transação salva primeiro (fonte mais confiável)
+      let transactionData: any = null;
       if (externalReference) {
         const txSnap = await db.collection('transactions_plans')
           .where('externalReference', '==', externalReference)
@@ -273,6 +284,7 @@ export const mercadoPagoWebhook = functions.https.onRequest(async (req, res): Pr
           .get();
         
         if (!txSnap.empty) {
+          transactionData = txSnap.docs[0].data();
           const ref = txSnap.docs[0].ref;
           await ref.set({
             status: status === 'approved' ? 'completed' : status,
@@ -283,8 +295,46 @@ export const mercadoPagoWebhook = functions.https.onRequest(async (req, res): Pr
         }
       }
 
+      // Extrair dados da transação ou do metadata (prioridade: transação > metadata)
+      const email = (
+        transactionData?.userEmail ||
+        paymentData?.metadata?.userEmail ||
+        paymentData?.metadata?.user_email ||
+        paymentData?.payer?.email ||
+        ''
+      )
+        .toString()
+        .trim()
+        .toLowerCase() || null;
+      
+      const planId = transactionData?.planId || paymentData?.metadata?.planId || paymentData?.metadata?.plan_id || 'standard';
+      const billingType = transactionData?.billingType || paymentData?.metadata?.billingType || paymentData?.metadata?.billing_type || 'monthly';
+
+      console.log('📧 Email:', email);
+      console.log('📦 Plano:', planId, transactionData ? '(da transação)' : '(do metadata)');
+      console.log('📅 Período:', billingType);
+      console.log('✅ Status:', status);
+
+      if (!email) {
+        console.log('⚠️ Pagamento sem email, não é possível atualizar usuário.');
+        res.status(200).json({ ok: true });
+        return;
+      }
+
       if (status === 'approved') {
         console.log('✅ Pagamento aprovado! Atualizando plano do usuário...');
+        
+        // Normalizar e validar planId
+        const normalizedPlanId = (planId || '').toLowerCase().trim();
+        if (!PLANOS[normalizedPlanId as PlanId]) {
+          console.error(`❌ Plano inválido: "${planId}" (normalizado: "${normalizedPlanId}")`);
+          console.error(`Planos válidos: ${Object.keys(PLANOS).join(', ')}`);
+          res.status(500).json({ error: `Plano inválido: ${planId}` });
+          return;
+        }
+        
+        const plan = PLANOS[normalizedPlanId as PlanId];
+        console.log(`✅ Usando plano normalizado: ${normalizedPlanId} (original: ${planId})`);
         
         // 🔢 Calcula data de expiração
         const startDate = new Date();
@@ -313,12 +363,12 @@ export const mercadoPagoWebhook = functions.https.onRequest(async (req, res): Pr
 
         const userUpdateData = {
           email,
-          plano: planId,
+          plano: normalizedPlanId,
           periodo: billingType,
           isActive: true,
           isSubscriber: true,
           subscription: {
-            plan: planId,
+            plan: normalizedPlanId,
             period: billingType,
             active: true,
             updatedAt: new Date(),
@@ -326,6 +376,7 @@ export const mercadoPagoWebhook = functions.https.onRequest(async (req, res): Pr
           },
           subscriptionStartDate: startDate,
           subscriptionEndDate: endDate,
+          funcionariosPermitidos: plan.max_funcionarios,
           atualizadoEm: new Date(),
         };
 
@@ -361,27 +412,19 @@ export const mercadoPagoWebhook = functions.https.onRequest(async (req, res): Pr
     res.status(500).json({ error: 'Erro interno' });
     return;
   }
-});
+  }
+);
 
 // ---------- 3. checkPaymentStatus ----------
-export const checkPaymentStatus = functions.https.onRequest(async (req, res): Promise<void> => {
-  // Carregar variáveis de ambiente obrigatórias
+export const checkPaymentStatus = onRequest(
+  { cors: true, memory: '256MiB', timeoutSeconds: 60 },
+  async (req, res): Promise<void> => {
+  // Carregar variáveis de ambiente - Firebase Functions v2 usa process.env diretamente
   const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN || 'APP_USR-5496244105993399-070119-b9bec860fcf72e513a288bf609f3700c-454772336';
   
   if (!MP_ACCESS_TOKEN) {
     console.error('MERCADO_PAGO_ACCESS_TOKEN não configurado');
     res.status(500).json({ error: 'Configuração do servidor incompleta' });
-    return;
-  }
-
-  // Configurar CORS
-  res.set('Access-Control-Allow-Origin', '*');
-  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-  // Responder a requisições OPTIONS (preflight)
-  if (req.method === 'OPTIONS') {
-    res.status(200).send('');
     return;
   }
 
@@ -398,4 +441,5 @@ export const checkPaymentStatus = functions.https.onRequest(async (req, res): Pr
     res.status(500).json({ error: 'Internal error' });
     return;
   }
-});
+  }
+);

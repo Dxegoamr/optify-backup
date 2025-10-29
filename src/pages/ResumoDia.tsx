@@ -15,7 +15,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, ReferenceLine } from 'recharts';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -654,7 +654,7 @@ const ResumoDia = () => {
                 }, {});
 
                 const sortedHours = Object.entries(hourlyStats)
-                  .sort(([,a], [,b]: any) => b.transactions - a.transactions)
+                  .sort(([,a], [,b]: any) => (b as any).transactions - (a as any).transactions)
                   .slice(0, 3);
 
                 return sortedHours.length > 0 ? (
@@ -885,7 +885,8 @@ const ResumoDia = () => {
                       depositos: platformDeposits,
                       saques: platformWithdraws,
                       transacoes: platformTransactions.length,
-                      color: platform.color
+                      color: platform.color,
+                      barColor: platformProfit >= 0 ? 'hsl(var(--success))' : 'hsl(var(--destructive))'
                     };
                   }).filter(p => p.transacoes > 0);
                 })()}>
@@ -931,11 +932,20 @@ const ResumoDia = () => {
                       return label;
                     }}
                   />
-                  <Bar 
-                    dataKey="lucro" 
-                    fill={(entry: any) => entry.lucro >= 0 ? 'hsl(var(--success))' : 'hsl(var(--destructive))'}
-                    radius={[4, 4, 0, 0]}
-                  />
+                  <Bar dataKey="lucro" radius={[4, 4, 0, 0]}>
+                    {platforms.filter((p: any) => todayTransactions.some((t: any) => t.platformId === p.id)).map((platform: any, index: number) => {
+                      const platformTransactions = todayTransactions.filter((t: any) => t.platformId === platform.id);
+                      const platformDeposits = platformTransactions
+                        .filter((t: any) => t.type === 'deposit')
+                        .reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+                      const platformWithdraws = platformTransactions
+                        .filter((t: any) => t.type === 'withdraw')
+                        .reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+                      const platformProfit = platformWithdraws - platformDeposits;
+                      const color = platformProfit >= 0 ? 'hsl(var(--success))' : 'hsl(var(--destructive))';
+                      return <Cell key={`cell-${index}`} fill={color} />;
+                    })}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -1243,12 +1253,12 @@ const ResumoDia = () => {
                         </div>
                       </td>
                       <td className="p-4 text-center">
-                        <Badge variant={transaction.type === 'deposit' ? 'destructive' : 'default'}>
+                        <Badge variant={transaction.type === 'withdraw' ? 'default' : 'destructive'}>
                           {transaction.type === 'deposit' ? 'Depósito' : 'Saque'}
                         </Badge>
                       </td>
                       <td className={`p-4 text-right font-semibold ${
-                        transaction.type === 'deposit' ? 'text-destructive' : 'text-success'
+                        transaction.type === 'withdraw' ? 'text-success' : 'text-destructive'
                       }`}>
                         {transaction.type === 'deposit' ? '-' : '+'}R$ {Number(transaction.amount || 0).toLocaleString('pt-BR')}
                       </td>

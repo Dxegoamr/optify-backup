@@ -502,16 +502,16 @@ const EmployeeProfile = () => {
                   transactions.map((transaction) => (
                     <TableRow key={transaction.id}>
                       <TableCell>
-                        <Badge variant={transaction.type === 'deposit' ? 'destructive' : 'default'}>
+                        <Badge variant={transaction.type === 'deposit' ? 'default' : 'destructive'}>
                           {transaction.type === 'deposit' ? (
                             <div className="flex items-center gap-1">
                               <TrendingUp className="h-3 w-3" />
-                              Despesa
+                              Depósito
                             </div>
                           ) : (
                             <div className="flex items-center gap-1">
                               <TrendingDown className="h-3 w-3" />
-                              Receita
+                              Saque
                             </div>
                           )}
                         </Badge>
@@ -540,7 +540,7 @@ const EmployeeProfile = () => {
                       </TableCell>
                       <TableCell>
                         <span className={transaction.type === 'deposit' ? 'text-success' : 'text-destructive'}>
-                          {transaction.type === 'deposit' ? '-' : '+'}R${' '}
+                          {transaction.type === 'deposit' ? '+' : '-'}R${' '}
                           {Number(transaction.amount).toLocaleString('pt-BR')}
                         </span>
                       </TableCell>

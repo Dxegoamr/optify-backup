@@ -111,3 +111,6 @@ git commit -m "fix(run): ensure app listens on \$PORT and add /healthz for Cloud
 **Data**: 2025-10-22  
 **Contexto**: Fix para "failed to start and listen on PORT" no Cloud Run
 
+
+
+

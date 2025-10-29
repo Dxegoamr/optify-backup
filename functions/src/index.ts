@@ -7,11 +7,10 @@
  * See a full list of supported triggers at https://firebase.google.com/docs/functions
  */
 
-import * as functions from "firebase-functions";
+import { onRequest } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions";
 import * as admin from "firebase-admin";
 import { MercadoPagoConfig, Preference, Payment } from "mercadopago";
-import corsLib from "cors";
 
 // Start writing functions
 // https://firebase.google.com/docs/functions/typescript
@@ -33,7 +32,6 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
-const cors = corsLib({ origin: true });
 
 // Load secrets from environment (set via firebase functions:config:set or env vars)
 const MP_ACCESS_TOKEN = process.env.MERCADOPAGO_ACCESS_TOKEN || process.env.mercadopago_access_token || "";
@@ -73,9 +71,10 @@ async function findPlan(identifier: string) {
   return null;
 }
 
-// HTTP endpoint to create a Checkout Preference
-export const mpCreatePreference = functions.https.onRequest((req, res) => {
-  cors(req, res, async () => {
+// HTTP endpoint to create a Checkout Preference  
+export const mpCreatePreference = onRequest(
+  { cors: true, memory: '256MiB', timeoutSeconds: 60 },
+  async (req, res) => {
     if (req.method !== "POST") {
       res.status(405).send("Method Not Allowed");
       return;
@@ -134,12 +133,13 @@ export const mpCreatePreference = functions.https.onRequest((req, res) => {
       res.status(500).json({ error: error?.message || "Erro interno" });
       return;
     }
-  });
-});
+  }
+);
 
 // Webhook de notificações do Mercado Pago
-export const mpWebhook = functions.https.onRequest(async (req, res) => {
-  await new Promise<void>((resolve) => cors(req, res, () => resolve()));
+export const mpWebhook = onRequest(
+  { cors: true, memory: '256MiB', timeoutSeconds: 60 },
+  async (req, res) => {
 
   // Verificação simples por secret (opcionalmente usar assinatura HMAC se necessário)
   const providedSecret = req.get("x-webhook-secret") || req.query.secret;
@@ -225,11 +225,13 @@ export const mpWebhook = functions.https.onRequest(async (req, res) => {
     logger.error("Erro no webhook:", error);
     res.status(500).send("Erro interno");
   }
-});
+  }
+);
 
 // Admin: conceder privilégios de admin a um usuário específico com secret
-export const grantAdmin = functions.https.onRequest(async (req, res) => {
-  await new Promise<void>((resolve) => cors(req, res, () => resolve()));
+export const grantAdmin = onRequest(
+  { cors: true, memory: '256MiB', timeoutSeconds: 60 },
+  async (req, res) => {
 
   if (req.method !== 'POST') {
     res.status(405).send('Method Not Allowed');
@@ -261,7 +263,8 @@ export const grantAdmin = functions.https.onRequest(async (req, res) => {
     logger.error('Erro ao conceder admin:', error);
     res.status(500).json({ error: 'Erro interno' });
   }
-});
+  }
+);
 
 // Export Mercado Pago functions
 export * from './mercadopago';

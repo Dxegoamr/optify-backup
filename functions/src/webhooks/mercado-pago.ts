@@ -141,20 +141,10 @@ async function saveRawEvent(eventId: string, type: string, data: any): Promise<v
  */
 async function applyBusinessEffects(paymentData: any): Promise<void> {
   const status = paymentData.status;
-  const email = paymentData.metadata?.user_email || paymentData.payer?.email;
-  const planId = paymentData.metadata?.plan_id || 'standard';
-  const billingType = paymentData.metadata?.billing_type || 'monthly';
   const externalReference = paymentData.external_reference;
 
-  logger.info('Aplicando efeitos de negócio', {
-    status,
-    email,
-    planId,
-    billingType,
-    externalReference,
-  });
-
-  // Atualizar transação
+  // Buscar dados da transação salva primeiro (fonte mais confiável)
+  let transactionData: any = null;
   if (externalReference) {
     const txSnap = await db.collection('transactions_plans')
       .where('externalReference', '==', externalReference)
@@ -162,6 +152,7 @@ async function applyBusinessEffects(paymentData: any): Promise<void> {
       .get();
     
     if (!txSnap.empty) {
+      transactionData = txSnap.docs[0].data();
       const ref = txSnap.docs[0].ref;
       await ref.update({
         status: status === 'approved' ? 'completed' : status,
@@ -171,6 +162,20 @@ async function applyBusinessEffects(paymentData: any): Promise<void> {
       logger.info('Transação atualizada', { externalReference, status });
     }
   }
+
+  // Extrair dados da transação ou do metadata (prioridade: transação > metadata)
+  const email = transactionData?.userEmail || paymentData.metadata?.userEmail || paymentData.metadata?.user_email || paymentData.payer?.email;
+  const planId = transactionData?.planId || paymentData.metadata?.planId || paymentData.metadata?.plan_id || 'standard';
+  const billingType = transactionData?.billingType || paymentData.metadata?.billingType || paymentData.metadata?.billing_type || 'monthly';
+
+  logger.info('Aplicando efeitos de negócio', {
+    status,
+    email,
+    planId,
+    billingType,
+    externalReference,
+    fromTransaction: !!transactionData,
+  });
 
   // Se pagamento aprovado, atualizar plano do usuário
   if (status === 'approved' && email) {
@@ -193,10 +198,23 @@ async function applyBusinessEffects(paymentData: any): Promise<void> {
  */
 async function updateUserPlan(email: string, planId: string, billingType: string, paymentData: any): Promise<void> {
   try {
-    const plan = PLANOS[planId as PlanId];
-    if (!plan) {
-      throw new Error(`Plano inválido: ${planId}`);
+    // Normalizar planId para minúsculas e validar
+    const normalizedPlanId = (planId || '').toLowerCase().trim() as PlanId;
+    
+    // Validar se é um plano válido
+    if (!PLANOS[normalizedPlanId]) {
+      logger.error(`❌ Plano inválido recebido: "${planId}" (normalizado: "${normalizedPlanId}")`);
+      throw new Error(`Plano inválido: ${planId}. Planos válidos: ${Object.keys(PLANOS).join(', ')}`);
     }
+    
+    const plan = PLANOS[normalizedPlanId];
+    
+    logger.info(`✅ Atualizando plano para: ${normalizedPlanId}`, {
+      email,
+      originalPlanId: planId,
+      normalizedPlanId,
+      billingType,
+    });
 
     // Calcular data de expiração
     const startDate = new Date();
@@ -210,12 +228,12 @@ async function updateUserPlan(email: string, planId: string, billingType: string
 
     const userUpdateData = {
       email: email.toLowerCase(),
-      plano: planId,
+      plano: normalizedPlanId,
       periodo: billingType,
       isActive: true,
       isSubscriber: true,
       subscription: {
-        plan: planId,
+        plan: normalizedPlanId,
         period: billingType,
         active: true,
         updatedAt: new Date(),
@@ -244,7 +262,8 @@ async function updateUserPlan(email: string, planId: string, billingType: string
 
       logger.info('Plano do usuário atualizado', {
         email,
-        planId,
+        planId: normalizedPlanId,
+        originalPlanId: planId,
         billingType,
         expiresAt: endDate,
       });

@@ -14,7 +14,7 @@ interface AIAssistantProps {
 }
 
 export const AIAssistant = ({ className }: AIAssistantProps) => {
-  const { user } = useFirebaseAuth();
+  const { user, isAdmin } = useFirebaseAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -124,7 +124,8 @@ export const AIAssistant = ({ className }: AIAssistantProps) => {
     });
   };
 
-  if (!user) return null;
+  // Verificar se o usuário é admin (chatbot está em fase de testes)
+  if (!user || !isAdmin) return null;
 
   return (
     <>

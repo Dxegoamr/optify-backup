@@ -31,7 +31,7 @@ const Pagamentos = () => {
   useEffect(() => {
     const initialSalaries: {[key: string]: number} = {};
     employees.forEach(emp => {
-      initialSalaries[emp.id] = emp.salary || 0;
+      initialSalaries[emp.id] = Number(emp.salary || 0);
     });
     setSalaryValues(initialSalaries);
   }, [employees]);
@@ -80,7 +80,7 @@ const Pagamentos = () => {
     id: emp.id,
     employeeId: emp.id,
     employeeName: emp.name,
-    amount: salaryValues[emp.id] || emp.salary || 0,
+    amount: Number(salaryValues[emp.id] || emp.salary || 0),
     status: Math.random() > 0.5 ? 'paid' : 'pending',
     dueDate: new Date().toISOString(),
     paidDate: Math.random() > 0.5 ? new Date().toISOString() : undefined
@@ -112,7 +112,9 @@ const Pagamentos = () => {
 
   // Função para lidar com mudança de salário
   const handleSalaryChange = (employeeId: string, value: string) => {
-    const newSalary = parseFloat(value) || 0;
+    // Remover caracteres não numéricos e converter para número
+    const cleanValue = value.replace(/[^0-9,.-]/g, '').replace(',', '.');
+    const newSalary = parseFloat(cleanValue) || 0;
     
     // Atualizar estado local imediatamente
     setSalaryValues(prev => ({
@@ -292,11 +294,12 @@ const Pagamentos = () => {
                     <td className="p-4">
                       <div className="relative">
                         <Input
-                          type="number"
+                          type="text"
+                          inputMode="decimal"
                           value={
-                            focusedInputs[payment.employeeId] && (salaryValues[payment.employeeId] || 0) === 0
+                            (salaryValues[payment.employeeId] || 0) === 0 && !focusedInputs[payment.employeeId]
                               ? ''
-                              : salaryValues[payment.employeeId] || 0
+                              : Number(salaryValues[payment.employeeId] || 0).toFixed(2).replace('.', ',')
                           }
                           className="w-32 pr-8"
                           placeholder="0,00"

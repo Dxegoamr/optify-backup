@@ -11,6 +11,7 @@ import { useCreatePreference } from '@/hooks/useCreatePreference';
 import { usePlanLimitations } from '@/hooks/usePlanLimitations';
 import { toast } from 'sonner';
 import { env } from '@/config/env';
+import AdBlockerWarning from '@/components/AdBlockerWarning';
 
 const Planos = () => {
   const { user } = useFirebaseAuth();
@@ -129,11 +130,26 @@ const Planos = () => {
 
       console.log('✅ Preferência criada:', preference);
 
-      // Redirecionar para o Mercado Pago
-      window.location.href = preference.init_point;
+      // Redirecionar para o Mercado Pago - tentar todas as URLs possíveis
+      const checkoutUrl = preference.checkout_url || preference.init_point || preference.sandbox_init_point;
+      
+      if (!checkoutUrl) {
+        console.error('❌ Nenhuma URL de checkout disponível:', preference);
+        throw new Error('URL de checkout não retornada pelo Mercado Pago');
+      }
+
+      console.log('🔗 Redirecionando para:', checkoutUrl);
+      
+      // Limpar estado da mutation antes de redirecionar
+      createPreferenceMutation.reset();
+      
+      window.location.href = checkoutUrl;
     } catch (error) {
       console.error('❌ Erro ao criar preferência:', error);
-      toast.error('Erro ao processar pagamento. Tente novamente.');
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      toast.error(`Erro ao processar pagamento: ${errorMessage}`);
+      // Resetar estado da mutation para habilitar o botão novamente
+      createPreferenceMutation.reset();
     }
   };
 
@@ -187,6 +203,7 @@ const Planos = () => {
   return (
     <DashboardLayout>
       <div className="space-y-8 animate-fade-in">
+        <AdBlockerWarning />
         <div className="text-center space-y-4">
           <h1 className="text-4xl font-bold">Escolha seu Plano</h1>
           <p className="text-muted-foreground text-lg">

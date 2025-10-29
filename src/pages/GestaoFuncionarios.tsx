@@ -185,9 +185,16 @@ const GestaoFuncionarios = () => {
     }
   };
   
-  // Buscar transações do dia atual
-  const today = new Date().toISOString().split('T')[0];
-  const { data: todayTransactions = [] } = useTransactions(user?.uid || '', today, today);
+  // Buscar todas as transações e filtrar localmente
+  const { data: allTransactions = [] } = useTransactions(user?.uid || '');
+  
+  // Buscar a data atual no formato correto (dd-mm-yyyy)
+  const todayString = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }).split('/').reverse().join('-');
+  
+  // Filtrar transações do dia atual
+  const todayTransactions = allTransactions.filter((transaction: any) => {
+    return transaction.date === todayString;
+  });
 
   const filteredEmployees = employees.filter(emp =>
     (emp.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||

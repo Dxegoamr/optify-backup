@@ -76,12 +76,16 @@ const EmployeeFormModal = () => {
   };
 
   const handleInputChange = (field: keyof EmployeeFormData, value: string) => {
-    let formattedValue = value;
+    let formattedValue: any = value;
     
     if (field === 'cpf') {
       formattedValue = formatCPF(value);
     } else if (field === 'phone') {
       formattedValue = formatPhone(value);
+    } else if (field === 'salary') {
+      // Remover caracteres não numéricos e converter para número
+      const cleanValue = value.replace(/[^0-9,.-]/g, '').replace(',', '.');
+      formattedValue = parseFloat(cleanValue) || 0;
     }
 
     setFormData(prev => ({ ...prev, [field]: formattedValue }));

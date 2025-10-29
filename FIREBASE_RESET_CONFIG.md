@@ -76,3 +76,6 @@ https://optify-definitivo.web.app/reset-password
 ---
 
 **💡 Após configurar no Firebase Console, a funcionalidade estará 100% operacional!**
+
+
+
