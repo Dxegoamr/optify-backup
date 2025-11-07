@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, XCircle, Clock, ArrowLeft, RefreshCw, Sparkles } from "lucide-react";
+import { CheckCircle, XCircle, Clock, ArrowLeft, RefreshCw } from "lucide-react";
 import { useFirebaseAuth } from "@/contexts/FirebaseAuthContext";
 import { UserProfileService } from "@/core/services/user-profile.service";
 import { env } from "@/config/env";
@@ -18,7 +18,6 @@ export default function PaymentResult({ mode }: { mode: "success" | "failure" | 
   const [currentMode, setCurrentMode] = useState(mode);
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [userInfo, setUserInfo] = useState<any>(null);
-  const [showAnimation, setShowAnimation] = useState(false);
   const [showContent, setShowContent] = useState(mode !== 'pending'); // Mostrar conteúdo imediatamente se não for pending
   
   // Hook para obter informações do usuário autenticado
@@ -75,7 +74,18 @@ export default function PaymentResult({ mode }: { mode: "success" | "failure" | 
         setCurrentMode('success');
         // Recarregar perfil do usuário para ver plano atualizado
         if (user?.uid) {
-          await fetchUserProfile();
+          const profile = await UserProfileService.getUserProfile(user.uid);
+          setUserInfo(profile);
+          
+          // Aguardar um pouco e disparar evento para atualizar limitações
+          setTimeout(() => {
+            if (profile?.plano) {
+              console.log('🔄 Disparando evento planChanged para atualizar limitações:', profile.plano);
+              window.dispatchEvent(new CustomEvent('planChanged', { 
+                detail: { userId: user.uid, newPlan: profile.plano } 
+              }));
+            }
+          }, 500);
         }
       }
     } catch (error: any) {
@@ -117,12 +127,20 @@ export default function PaymentResult({ mode }: { mode: "success" | "failure" | 
 
           setUserInfo(userData);
 
-          // Se o plano mudou e não é mais 'free', atualizar para success
-          if (newPlan !== 'free' && newPlan !== previousPlan && currentMode === 'pending') {
-            console.log('✅ Plano ativado! Mudando para success');
-            setCurrentMode('success');
-            // Forçar recarregamento do perfil
-            fetchUserProfile();
+          // Se o plano mudou, atualizar limitações e mudar para success se estava pending
+          if (newPlan !== previousPlan) {
+            console.log('📊 Plano mudou, atualizando limitações:', { previousPlan, newPlan });
+            
+            // Disparar evento global para atualizar limitações do plano
+            window.dispatchEvent(new CustomEvent('planChanged', { 
+              detail: { userId: user.uid, newPlan } 
+            }));
+            
+            // Se estava pendente e agora não é mais free, mudar para success
+            if (newPlan !== 'free' && currentMode === 'pending') {
+              console.log('✅ Plano ativado! Mudando para success');
+              setCurrentMode('success');
+            }
           }
         }
       },
@@ -142,16 +160,22 @@ export default function PaymentResult({ mode }: { mode: "success" | "failure" | 
     if (userInfo?.plano && userInfo.plano !== 'free' && currentMode === 'pending') {
       console.log('✅ Plano detectado! Mudando para success');
       setCurrentMode('success');
+      
+      // Disparar evento global para atualizar limitações do plano
+      if (user?.uid) {
+        window.dispatchEvent(new CustomEvent('planChanged', { 
+          detail: { userId: user.uid, newPlan: userInfo.plano } 
+        }));
+      }
     }
-  }, [userInfo?.plano, currentMode]);
+  }, [userInfo?.plano, currentMode, user?.uid]);
 
-  // Animação quando muda para success
+  // Mostrar conteúdo quando muda para success
   useEffect(() => {
     if (currentMode === 'success' && mode !== 'success') {
-      setShowAnimation(true);
       setTimeout(() => {
         setShowContent(true);
-      }, 1500); // Mostrar conteúdo após 1.5s de animação
+      }, 500); // Mostrar conteúdo após 0.5s
     } else {
       // Mostrar conteúdo imediatamente para outros modos (pending, failure)
       setShowContent(true);
@@ -242,25 +266,7 @@ export default function PaymentResult({ mode }: { mode: "success" | "failure" | 
   return (
     <DashboardLayout>
       <div className="min-h-screen flex items-center justify-center p-4 relative">
-        {/* Animação de confetes para success */}
-        {showAnimation && currentMode === 'success' && (
-          <div className="fixed inset-0 pointer-events-none z-50">
-            {[...Array(50)].map((_, i) => (
-              <div
-                key={i}
-                className="absolute animate-bounce"
-                style={{
-                  left: `${Math.random() * 100}%`,
-                  top: `${Math.random() * 100}%`,
-                  animationDelay: `${Math.random() * 2}s`,
-                  animationDuration: `${2 + Math.random() * 2}s`,
-                }}
-              >
-                <Sparkles className="h-4 w-4 text-emerald-500" />
-              </div>
-            ))}
-          </div>
-        )}
+        {/* Animação de confetes removida */}
 
         <Card className={`w-full max-w-2xl p-8 ${config.cardBg} border shadow-lg transition-all duration-1000 ${showContent ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
           <div className="space-y-8">

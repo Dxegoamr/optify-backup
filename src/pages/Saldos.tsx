@@ -82,11 +82,49 @@ const Saldos = () => {
         
         console.log(`Debug - Employee: ${emp.name}, Platform: ${plat.name}, Transactions:`, empTransactions);
         
-        const deposits = empTransactions
+        // Buscar o último ajuste manual (se existir) para definir o saldo diretamente
+        const manualAdjustments = empTransactions.filter(
+          (t: any) => t.description && t.description.includes('Ajuste manual de saldo')
+        );
+        
+        // Se houver ajuste manual, usar APENAS o valor do último ajuste como saldo
+        // e IGNORAR todas as outras transações para essa combinação funcionário+plataforma
+        if (manualAdjustments.length > 0) {
+          // Ordenar por timestamp ou data, usando múltiplos critérios para garantir ordem correta
+          const lastAdjustment = manualAdjustments.sort((a: any, b: any) => {
+            // Tentar usar createdAt primeiro (mais preciso)
+            const timestampA = a.createdAt?.toDate?.()?.getTime() || 
+                              (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0) ||
+                              (a.updatedAt?.toDate?.()?.getTime() || 0);
+            const timestampB = b.createdAt?.toDate?.()?.getTime() || 
+                              (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0) ||
+                              (b.updatedAt?.toDate?.()?.getTime() || 0);
+            
+            // Se não tiver timestamp, usar a data como fallback
+            if (timestampA === 0 && timestampB === 0) {
+              const dateA = new Date(a.date || 0).getTime();
+              const dateB = new Date(b.date || 0).getTime();
+              return dateB - dateA;
+            }
+            
+            return timestampB - timestampA;
+          })[0];
+          
+          // O saldo é o valor do ajuste manual (sempre positivo)
+          const manualBalance = Number(lastAdjustment.amount || 0);
+          balances[emp.id].platforms[plat.id] = manualBalance;
+          balances[emp.id].total += manualBalance;
+        } else {
+          // Calcular normalmente com transações normais (sem ajustes manuais)
+          const normalTransactions = empTransactions.filter(
+            (t: any) => !t.description || !t.description.includes('Ajuste manual de saldo')
+          );
+          
+          const deposits = normalTransactions
           .filter((t: any) => t.type === 'deposit')
           .reduce((s: number, t: any) => s + Number(t.amount || 0), 0);
         
-        const withdraws = empTransactions
+          const withdraws = normalTransactions
           .filter((t: any) => t.type === 'withdraw')
           .reduce((s: number, t: any) => s + Number(t.amount || 0), 0);
         
@@ -95,6 +133,7 @@ const Saldos = () => {
         const balance = deposits - withdraws; // Saldo real (pode ser negativo)
         balances[emp.id].platforms[plat.id] = Math.max(0, balance); // Exibir apenas valores positivos
         balances[emp.id].total += Math.max(0, balance);
+        }
       });
     });
 
@@ -156,29 +195,28 @@ const Saldos = () => {
     if (!editData) return;
 
     try {
-      // Criar uma transação de ajuste manual
+      // Criar uma transação de ajuste manual que define o saldo final diretamente
       const adjustmentAmount = Number(editData.value);
-      const employee = employees.find((e: any) => e.id === employeeId);
-      const empBalance = platformBalances.find((b: any) => b.name === (employee as any)?.name);
-      const currentBalance = (empBalance as any)?.platforms?.[platformId] || 0;
       
-      // Calcular a diferença para criar uma transação de ajuste
-      const difference = adjustmentAmount - currentBalance;
-      
-      if (difference !== 0) {
-        const transactionData = {
+      // Criar apenas uma transação que representa o saldo final desejado
+      // Esta transação será usada como referência para o saldo, ignorando todas as outras transações
+      const setBalanceTransaction = {
           userId: user?.uid || '',
           employeeId: employeeId,
           platformId: platformId,
-          type: (difference > 0 ? 'deposit' : 'withdraw') as 'deposit' | 'withdraw',
-          amount: Math.abs(difference),
+        type: 'deposit' as 'deposit' | 'withdraw', // Sempre usar 'deposit' para ajustes manuais
+        amount: Math.abs(adjustmentAmount), // Usar valor absoluto
           date: new Date().toISOString().split('T')[0],
           description: 'Ajuste manual de saldo'
         };
 
-        // Usar o hook de criar transação
-        await createTransactionMutation.mutateAsync(transactionData);
-      }
+      await createTransactionMutation.mutateAsync(setBalanceTransaction);
+
+      // Invalidar queries para forçar atualização dos dados
+      queryClient.invalidateQueries({ queryKey: ['firebase-transactions'] });
+      
+      // Refetch das transações para garantir que os dados estejam atualizados
+      await queryClient.refetchQueries({ queryKey: ['firebase-transactions'] });
 
       // Remover do estado de edição
       const newEditingBalance = { ...editingBalance };

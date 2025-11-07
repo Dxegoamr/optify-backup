@@ -9,6 +9,7 @@ import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
 import { getAllPlanInfo } from '@/core/services/plan-limitations.service';
 import { useCreatePreference } from '@/hooks/useCreatePreference';
 import { usePlanLimitations } from '@/hooks/usePlanLimitations';
+import { logPlanSelection } from '@/core/services/plan-selection-tracker.service';
 import { toast } from 'sonner';
 import { env } from '@/config/env';
 import AdBlockerWarning from '@/components/AdBlockerWarning';
@@ -31,7 +32,18 @@ const Planos = () => {
   const isPlanLower = (planValue: string) => {
     const currentLevel = planHierarchy[currentPlan as keyof typeof planHierarchy] || 0;
     const planLevel = planHierarchy[planValue as keyof typeof planHierarchy] || 0;
-    return planLevel < currentLevel;
+    const isLower = planLevel < currentLevel;
+    
+    // Debug log
+    console.log('🔍 Debug Botão - isPlanLower:', {
+      planValue,
+      currentPlan,
+      currentLevel,
+      planLevel,
+      isLower
+    });
+    
+    return isLower;
   };
 
   const planFeatures = {
@@ -120,6 +132,15 @@ const Planos = () => {
         billingType: isAnnual ? 'annual' : 'monthly'
       });
 
+      // Registrar seleção de plano no log
+      const logId = await logPlanSelection(
+        user.uid,
+        user.email || '',
+        planId,
+        isAnnual ? 'annual' : 'monthly'
+      );
+      console.log('📝 Log de seleção criado:', logId);
+
       const preference = await createPreferenceMutation.mutateAsync({
         userId: user.uid,
         userEmail: user.email || '',
@@ -135,6 +156,7 @@ const Planos = () => {
       
       if (!checkoutUrl) {
         console.error('❌ Nenhuma URL de checkout disponível:', preference);
+        createPreferenceMutation.reset();
         throw new Error('URL de checkout não retornada pelo Mercado Pago');
       }
 
@@ -143,13 +165,31 @@ const Planos = () => {
       // Limpar estado da mutation antes de redirecionar
       createPreferenceMutation.reset();
       
-      window.location.href = checkoutUrl;
+      // Pequeno delay para garantir que o estado foi resetado
+      setTimeout(() => {
+        window.location.href = checkoutUrl;
+      }, 100);
     } catch (error) {
       console.error('❌ Erro ao criar preferência:', error);
       const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
-      toast.error(`Erro ao processar pagamento: ${errorMessage}`);
-      // Resetar estado da mutation para habilitar o botão novamente
-      createPreferenceMutation.reset();
+      
+      // Extrair mensagem de erro mais detalhada
+      let detailedMessage = errorMessage;
+      if (error instanceof Error && 'response' in error) {
+        const response = (error as any).response;
+        if (response?.data?.message) {
+          detailedMessage = response.data.message;
+        } else if (response?.data?.error?.message) {
+          detailedMessage = response.data.error.message;
+        }
+      }
+      
+      toast.error(`Erro ao processar pagamento: ${detailedMessage}`);
+      
+      // Sempre resetar estado da mutation para habilitar o botão novamente
+      setTimeout(() => {
+        createPreferenceMutation.reset();
+      }, 100);
     }
   };
 
@@ -281,25 +321,69 @@ const Planos = () => {
                 </div>
 
                 <div className="flex-shrink-0">
-                  <Button
-                    className="w-full"
-                    variant={plan.current ? 'outline' : 'default'}
-                    disabled={plan.current || createPreferenceMutation.isPending || isPlanLower(plan.value)}
-                    onClick={() => !plan.current && !isPlanLower(plan.value) && handleAssinar(plan.value)}
-                  >
-                    {createPreferenceMutation.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Redirecionando...
-                      </>
-                    ) : plan.current ? (
-                      'Plano Atual'
-                    ) : isPlanLower(plan.value) ? (
-                      'Plano Menor'
-                    ) : (
-                      'Assinar'
-                    )}
-                  </Button>
+                  {(() => {
+                    // NÃO incluir isError como condição de disabled - permite clicar para tentar novamente
+                    const isDisabled = plan.current || createPreferenceMutation.isPending || isPlanLower(plan.value);
+                    const disabledReasons = {
+                      isCurrent: plan.current,
+                      isPending: createPreferenceMutation.isPending,
+                      isError: createPreferenceMutation.isError,
+                      isLower: isPlanLower(plan.value)
+                    };
+                    
+                    // Log apenas uma vez por plano
+                    if (plan.name === 'Standard') {
+                      console.log(`🔍 Debug Botão [${plan.name}]:`, {
+                        disabled: isDisabled,
+                        reasons: disabledReasons,
+                        currentPlan,
+                        planValue: plan.value,
+                        mutationState: {
+                          isPending: createPreferenceMutation.isPending,
+                          isError: createPreferenceMutation.isError,
+                          error: createPreferenceMutation.error
+                        }
+                      });
+                    }
+                    
+                    return (
+                      <Button
+                        className="w-full"
+                        variant={plan.current ? 'outline' : 'default'}
+                        disabled={isDisabled}
+                        onClick={() => {
+                          if (!plan.current && !isPlanLower(plan.value) && !createPreferenceMutation.isPending) {
+                            // Resetar mutation se estiver em erro antes de tentar novamente
+                            if (createPreferenceMutation.isError) {
+                              console.log('🔄 Resetando mutation após erro');
+                              createPreferenceMutation.reset();
+                              // Aguardar um pouco antes de chamar handleAssinar
+                              setTimeout(() => {
+                                handleAssinar(plan.value);
+                              }, 100);
+                            } else {
+                              handleAssinar(plan.value);
+                            }
+                          }
+                        }}
+                      >
+                        {createPreferenceMutation.isPending ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Redirecionando...
+                          </>
+                        ) : plan.current ? (
+                          'Plano Atual'
+                        ) : isPlanLower(plan.value) ? (
+                          'Plano Menor'
+                        ) : createPreferenceMutation.isError ? (
+                          'Tentar Novamente'
+                        ) : (
+                          'Assinar'
+                        )}
+                      </Button>
+                    );
+                  })()}
                 </div>
               </div>
             </Card>

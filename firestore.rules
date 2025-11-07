@@ -92,6 +92,14 @@ service cloud.firestore {
       allow update, delete: if false; // Histórico é imutável
     }
     
+    // Log de seleções de planos (para rastreamento)
+    match /plan_selections/{selectionId} {
+      allow read: if isAuthed() && (isOwner() || isAdmin());
+      allow create: if isAuthed() && willBeOwner() && hasRequiredFields(['userId', 'selectedPlan', 'timestamp', 'status']);
+      allow update: if isAdmin(); // Apenas admins/sistema podem atualizar status
+      allow delete: if isAdmin();
+    }
+    
     // Histórico de promoções de admin
     match /admin_promotion_history/{historyId} {
       allow read: if isAdmin();

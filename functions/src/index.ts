@@ -34,8 +34,9 @@ if (!admin.apps.length) {
 
 
 // Load secrets from environment (set via firebase functions:config:set or env vars)
-const MP_ACCESS_TOKEN = process.env.MERCADOPAGO_ACCESS_TOKEN || process.env.mercadopago_access_token || "";
-const MP_WEBHOOK_SECRET = process.env.MERCADOPAGO_WEBHOOK_SECRET || process.env.mercadopago_webhook_secret || "";
+// Priorizar MERCADO_PAGO_ACCESS_TOKEN (com underscore) como está no Google Cloud
+const MP_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN || process.env.MERCADOPAGO_ACCESS_TOKEN || process.env.mercadopago_access_token || "";
+const MP_WEBHOOK_SECRET = process.env.MERCADO_PAGO_WEBHOOK_SECRET || process.env.MERCADOPAGO_WEBHOOK_SECRET || process.env.mercadopago_webhook_secret || "";
 
 // Configure SDK
 let mpConfig: MercadoPagoConfig | null = null;
@@ -266,8 +267,17 @@ export const grantAdmin = onRequest(
   }
 );
 
-// Export Mercado Pago functions
-export * from './mercadopago';
+// Export Mercado Pago functions (excluding webhook which is in webhooks/)
+export { createPaymentPreference, checkPaymentStatus } from './mercadopago';
+
+// Export scheduled cleanup functions
+export * from './scheduled/cleanup';
+
+// Export stats aggregation functions
+export * from './stats/aggregations';
+
+// Export webhook functions (includes mercadoPagoWebhook)
+export * from './webhooks/mercado-pago';
 
 // export const helloWorld = onRequest((request, response) => {
 //   logger.info("Hello logs!", {structuredData: true});

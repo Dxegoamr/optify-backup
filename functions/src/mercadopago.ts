@@ -18,9 +18,9 @@ const PLANOS: Record<PlanId, {
   max_funcionarios: number;
 }> = {
   free: { nome: 'Free', preco_mensal: 0, preco_anual: 0, max_funcionarios: 1 },
-  standard: { nome: 'Standard', preco_mensal: 1, preco_anual: 10.20, max_funcionarios: 5 },
+  standard: { nome: 'Standard', preco_mensal: 34.90, preco_anual: 356.76, max_funcionarios: 5 },
   medium: { nome: 'Medium', preco_mensal: 49.90, preco_anual: 509.16, max_funcionarios: 10 },
-  ultimate: { nome: 'Ultimate', preco_mensal: 99.90, preco_anual: 1018.32, max_funcionarios: 50 },
+  ultimate: { nome: 'Ultimate', preco_mensal: 74.90, preco_anual: 764.76, max_funcionarios: 50 },
 };
 
 // ---------- helpers ----------
@@ -66,21 +66,33 @@ export const createPaymentPreference = onRequest(
 
   try {
     // Carregar variáveis de ambiente - Firebase Functions v2
-    const MP_ACCESS_TOKEN = (process.env.MERCADO_PAGO_ACCESS_TOKEN || '').trim();
+    // Priorizar MERCADO_PAGO_ACCESS_TOKEN (com underscore) como configurado no Google Cloud
+    const MP_ACCESS_TOKEN = (
+      process.env.MERCADO_PAGO_ACCESS_TOKEN || 
+      process.env.MERCADOPAGO_ACCESS_TOKEN || 
+      ''
+    ).trim();
     const BASE_URL_FRONTEND = (process.env.BASE_URL_FRONTEND || 'https://optify.host').trim();
     
     console.log('🔍 Debug - Configuração:', {
       hasToken: !!MP_ACCESS_TOKEN,
       tokenLength: MP_ACCESS_TOKEN.length,
+      tokenStartsWith: MP_ACCESS_TOKEN.substring(0, 10),
       hasBaseUrl: !!BASE_URL_FRONTEND,
-      baseUrl: BASE_URL_FRONTEND
+      baseUrl: BASE_URL_FRONTEND,
+      hasEnvToken1: !!process.env.MERCADO_PAGO_ACCESS_TOKEN,
+      hasEnvToken2: !!process.env.MERCADOPAGO_ACCESS_TOKEN,
     });
     
     if (!MP_ACCESS_TOKEN) {
       console.error('❌ Token do Mercado Pago não configurado');
+      console.error('❌ Variáveis disponíveis:', {
+        MERCADO_PAGO_ACCESS_TOKEN: !!process.env.MERCADO_PAGO_ACCESS_TOKEN,
+        MERCADOPAGO_ACCESS_TOKEN: !!process.env.MERCADOPAGO_ACCESS_TOKEN,
+      });
       res.status(500).json({ 
         error: 'Configuração incompleta',
-        message: 'Token do Mercado Pago não está configurado'
+        message: 'Token do Mercado Pago não está configurado. Verifique as variáveis de ambiente MERCADO_PAGO_ACCESS_TOKEN ou MERCADOPAGO_ACCESS_TOKEN'
       });
       return;
     }
@@ -114,14 +126,37 @@ export const createPaymentPreference = onRequest(
     }
 
     const amount = billingType === 'annual' ? plan.preco_anual : plan.preco_mensal;
+    
+    // Validar valor mínimo
+    if (!amount || amount <= 0) {
+      console.error('❌ Valor inválido:', { amount, planId, billingType, plan });
+      res.status(400).json({ 
+        error: 'Valor inválido',
+        message: `O valor do plano ${plan.nome} (${billingType}) não é válido: R$ ${amount}`
+      });
+      return;
+    }
+
+    // Garantir que o valor tenha no máximo 2 casas decimais
+    const normalizedAmount = Math.round(amount * 100) / 100;
+    
+    console.log('🔍 Debug - Configuração da preferência:', {
+      planId,
+      planName: plan.nome,
+      billingType,
+      amount: normalizedAmount,
+      originalAmount: amount
+    });
+
     const external_reference = `${userId}__${planId}__${billingType}__${Date.now()}`;
 
     const prefBody = {
       items: [{
         title: `Optify - Plano ${plan.nome} (${billingType === 'annual' ? 'Anual' : 'Mensal'})`,
+        description: `Assinatura do plano ${plan.nome} - Optify`,
         quantity: 1,
         currency_id: 'BRL',
-        unit_price: amount,
+        unit_price: normalizedAmount,
       }],
       payment_methods: {
         excluded_payment_methods: [],
@@ -135,16 +170,27 @@ export const createPaymentPreference = onRequest(
       },
       auto_return: 'approved',
       external_reference,
-      metadata: { userId, userEmail, planId, billingType },
+      metadata: {
+        email: userEmail, // campo usado pelo webhook
+        userId,           // opcional: manter se necessário
+        planId,
+        billingType
+      },
       notification_url: `https://us-central1-optify-definitivo.cloudfunctions.net/mercadoPagoWebhook`,
       statement_descriptor: 'OPTIFY',
       payer: {
-        name: userName,
-        email: userEmail,
+        name: userName || 'Usuário',
+        email: (userEmail || '').trim().toLowerCase(),
+        identification: {
+          type: 'CPF',
+          number: '00000000000',
+        },
       },
     };
 
-    console.log('🔍 Debug - Chamando API do Mercado Pago...');
+    console.log('🔍 Debug - Payload completo para MP:', JSON.stringify(prefBody, null, 2));
+    console.log('🔍 Debug - Token configurado:', MP_ACCESS_TOKEN ? `APP_USR-...${MP_ACCESS_TOKEN.slice(-10)}` : 'NÃO CONFIGURADO');
+    
     const resp = await fetch(`${MP_API}/checkout/preferences`, {
       method: 'POST',
       headers: {
@@ -156,44 +202,111 @@ export const createPaymentPreference = onRequest(
     });
 
     console.log('🔍 Debug - Status da resposta MP:', resp.status);
+    console.log('🔍 Debug - Headers da resposta:', Object.fromEntries(resp.headers.entries()));
+    
     const data = await resp.json();
-    console.log('🔍 Debug - Resposta MP:', JSON.stringify(data).substring(0, 200));
+    
+    // Log completo da resposta (importante para debug)
+    console.log('🔍 Debug - Resposta completa do MP:', JSON.stringify(data, null, 2));
+    
+    // Verificar se há erros na resposta mesmo com status 200/201
+    if (data.errors && Array.isArray(data.errors) && data.errors.length > 0) {
+      console.error('❌ Erros na resposta do Mercado Pago:', data.errors);
+      res.status(500).json({ 
+        error: 'Erros no Mercado Pago',
+        details: data.errors,
+        message: data.message || 'Erro ao criar preferência no Mercado Pago'
+      });
+      return;
+    }
     
     if (!resp.ok) {
       console.error('❌ Erro do Mercado Pago:', data);
-      res.status(500).json({ error: data });
+      console.error('❌ Status HTTP:', resp.status);
+      console.error('❌ Headers:', Object.fromEntries(resp.headers.entries()));
+      res.status(500).json({ 
+        error: data,
+        status: resp.status,
+        message: data.message || 'Erro ao criar preferência no Mercado Pago'
+      });
       return;
     }
 
-    await createPlanTransaction({
-      userId, userEmail, userName, planId, amount, planName: plan.nome,
-      billingType, paymentProvider: 'mercadopago', transactionId: data.id,
-      externalReference: external_reference,
-    });
-
-    console.log('🔍 Debug - URLs retornadas:', {
-      init_point: data.init_point,
-      sandbox_init_point: data.sandbox_init_point,
-      id: data.id
-    });
-
-    // Garantir que sempre retornamos uma URL de checkout
-    const checkoutUrl = data.init_point || data.sandbox_init_point;
-    
-    if (!checkoutUrl) {
-      console.error('❌ Nenhuma URL de checkout disponível');
+    // Validar se a preferência foi criada corretamente
+    if (!data.id) {
+      console.error('❌ Preferência criada sem ID:', data);
       res.status(500).json({ 
-        error: 'URL de checkout não disponível',
+        error: 'Preferência inválida',
+        message: 'O Mercado Pago retornou uma preferência sem ID',
         details: data 
       });
       return;
     }
 
+    // Verificar se há URL de checkout
+    const checkoutUrl = data.init_point || data.sandbox_init_point;
+    
+    if (!checkoutUrl) {
+      console.error('❌ Nenhuma URL de checkout disponível');
+      console.error('❌ Dados da preferência:', JSON.stringify(data, null, 2));
+      res.status(500).json({ 
+        error: 'URL de checkout não disponível',
+        message: 'O Mercado Pago não retornou uma URL de checkout válida',
+        details: data 
+      });
+      return;
+    }
+
+    // Verificar se há problemas na preferência que podem desabilitar o botão
+    const preferenceStatus = data.status || 'unknown';
+    const collectorId = data.collector_id;
+    const totalInItems = data.items?.reduce((sum: number, item: any) => sum + (item.unit_price * item.quantity), 0) || 0;
+    
+    console.log('🔍 Debug - Status da preferência:', {
+      id: data.id,
+      status: preferenceStatus,
+      collector_id: collectorId,
+      init_point: !!data.init_point,
+      sandbox_init_point: !!data.sandbox_init_point,
+      items: data.items,
+      total_amount: totalInItems,
+      expected_amount: normalizedAmount
+    });
+
+    // Verificar se o total está correto
+    if (Math.abs(totalInItems - normalizedAmount) > 0.01) {
+      console.warn('⚠️ Aviso: Valor total dos items não confere:', {
+        expected: normalizedAmount,
+        actual: totalInItems,
+        difference: Math.abs(totalInItems - normalizedAmount)
+      });
+    }
+
+    await createPlanTransaction({
+      userId, userEmail, userName, planId, amount: normalizedAmount, planName: plan.nome,
+      billingType, paymentProvider: 'mercadopago', transactionId: data.id,
+      externalReference: external_reference,
+    });
+
+    console.log('✅ Preferência criada com sucesso:', {
+      id: data.id,
+      checkoutUrl,
+      status: preferenceStatus,
+      totalAmount: normalizedAmount
+    });
+
+    // Retornar todos os dados relevantes da preferência
     res.json({
-      init_point: data.init_point,
-      sandbox_init_point: data.sandbox_init_point,
       id: data.id,
       checkout_url: checkoutUrl,
+      init_point: checkoutUrl,
+      sandbox_init_point: data.sandbox_init_point,
+      status: preferenceStatus,
+      collector_id: collectorId,
+      total_amount: normalizedAmount,
+      items: data.items,
+      // Retornar dados completos para debug
+      ...data
     });
     return;
   } catch (err: any) {
@@ -210,223 +323,8 @@ export const createPaymentPreference = onRequest(
 );
 
 // ---------- 2. mercadoPagoWebhook ----------
-// Verificação de assinatura desabilitada temporariamente para debug
-// function verifySignature(rawBody: string, headers: any, webhookSecret: string) {
-//   const sig = headers['x-signature'] || '';
-//   if (!sig || !webhookSecret) return false;
-//   const expected = crypto.createHmac('sha256', webhookSecret).update(rawBody).digest('hex');
-//   return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
-// }
-
-export const mercadoPagoWebhook = onRequest(
-  { 
-    cors: true, 
-    memory: '256MiB', 
-    timeoutSeconds: 60,
-    secrets: ['MERCADO_PAGO_ACCESS_TOKEN']
-  },
-  async (req, res): Promise<void> => {
-  try {
-    // Carregar variáveis de ambiente - Firebase Functions v2
-    const MP_ACCESS_TOKEN = (process.env.MERCADO_PAGO_ACCESS_TOKEN || '').trim();
-    
-    if (!MP_ACCESS_TOKEN) {
-      console.error('❌ MERCADO_PAGO_ACCESS_TOKEN não configurado');
-      res.status(500).json({ error: 'Configuração do servidor incompleta' });
-      return;
-    }
-
-    const { type, data, action } = req.body;
-    console.log('📋 Webhook recebido:', req.body);
-
-    // ⚠️ Ignora merchant_order porque não tem dados ainda
-    if (type === 'merchant_order') {
-      console.log('⏭️ Ignorando webhook merchant_order');
-      res.status(200).json({ ok: true });
-      return;
-    }
-
-    // 🔹 Processa somente webhooks de pagamento
-    if (type === 'payment' || (action && action.startsWith('payment.'))) {
-      const paymentId = data?.id;
-
-      if (!paymentId) {
-        console.log('⚠️ Nenhum paymentId encontrado.');
-        res.status(400).json({ error: 'paymentId não encontrado' });
-        return;
-      }
-
-      // 🔍 Busca informações do pagamento no MercadoPago
-      console.log('🔍 Buscando dados do pagamento:', paymentId);
-      const response = await fetch(`${MP_API}/v1/payments/${paymentId}`, {
-        headers: {
-          Authorization: `Bearer ${MP_ACCESS_TOKEN}`,
-        },
-      });
-
-      const paymentData = await response.json();
-      console.log('📊 Dados do pagamento:', paymentData);
-
-      if (paymentData.error) {
-        console.error('❌ Erro ao buscar pagamento:', paymentData);
-        res.status(400).json({ error: 'Erro ao buscar pagamento' });
-        return;
-      }
-
-      console.log('🔍 Metadata:', paymentData?.metadata);
-      console.log('🔍 Payer:', paymentData?.payer);
-      console.log('🔍 External Reference:', paymentData?.external_reference);
-
-      const status = paymentData?.status;
-      const externalReference = paymentData?.external_reference;
-
-      // Buscar dados da transação salva primeiro (fonte mais confiável)
-      let transactionData: any = null;
-      if (externalReference) {
-        const txSnap = await db.collection('transactions_plans')
-          .where('externalReference', '==', externalReference)
-          .limit(1)
-          .get();
-        
-        if (!txSnap.empty) {
-          transactionData = txSnap.docs[0].data();
-          const ref = txSnap.docs[0].ref;
-          await ref.set({
-            status: status === 'approved' ? 'completed' : status,
-            paymentMethod: paymentData.payment_type_id,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          }, { merge: true });
-          console.log('✅ Transação atualizada');
-        }
-      }
-
-      // Extrair email (prioridade: transactionData > metadata > payer)
-      const email = (
-        transactionData?.userEmail ||
-        paymentData?.metadata?.email ||
-        paymentData?.metadata?.userEmail ||
-        paymentData?.metadata?.user_email ||
-        paymentData?.payer?.email ||
-        ''
-      )
-        ?.toString()
-        .trim()
-        .toLowerCase() || null;
-      
-      // Extrair plano e período (prioridade: transactionData > metadata)
-      // Converter billingType para periodo (mensal/anual)
-      const planIdRaw = transactionData?.planId || paymentData?.metadata?.planId || paymentData?.metadata?.plan_id || paymentData?.metadata?.plano || 'standard';
-      const billingTypeRaw = transactionData?.billingType || paymentData?.metadata?.billingType || paymentData?.metadata?.billing_type || paymentData?.metadata?.periodo || 'monthly';
-      
-      // Normalizar planId
-      const planId = (planIdRaw || '').toLowerCase().trim();
-      // Converter billingType para periodo (compatibilidade)
-      const periodo = billingTypeRaw === 'annual' || billingTypeRaw === 'anual' ? 'anual' : 'mensal';
-
-      console.log('📧 Email:', email);
-      console.log('📦 Plano (raw):', planIdRaw, '-> (normalizado):', planId);
-      console.log('📅 Período (raw):', billingTypeRaw, '-> (normalizado):', periodo);
-      console.log('✅ Status:', status);
-
-      if (!email) {
-        console.log('⚠️ Pagamento sem email, não é possível atualizar usuário.');
-        res.status(200).json({ ok: true });
-        return;
-      }
-
-      if (status === 'approved') {
-        console.log('✅ Pagamento aprovado! Atualizando plano do usuário...');
-        
-        // Validar planId
-        if (!PLANOS[planId as PlanId]) {
-          console.error(`❌ Plano inválido: "${planIdRaw}" (normalizado: "${planId}")`);
-          console.error(`Planos válidos: ${Object.keys(PLANOS).join(', ')}`);
-          res.status(500).json({ error: `Plano inválido: ${planIdRaw}` });
-          return;
-        }
-        
-        const plan = PLANOS[planId as PlanId];
-        console.log(`✅ Usando plano: ${planId}`);
-        
-        // 🔢 Calcula data de expiração
-        const startDate = new Date();
-        const endDate = new Date(startDate);
-        if (periodo === 'mensal' || billingTypeRaw === 'monthly') {
-          endDate.setMonth(endDate.getMonth() + 1);
-        } else if (periodo === 'anual' || billingTypeRaw === 'annual') {
-          endDate.setFullYear(endDate.getFullYear() + 1);
-        }
-
-        console.log('🔍 Buscando usuário pelo email:', email);
-        
-        // 🔹 Localiza documentos existentes do usuário pelo campo email
-        let usersSnap;
-        try {
-          usersSnap = await db
-            .collection('users')
-            .where('email', '==', email)
-            .get();
-          console.log('📦 Usuários encontrados:', usersSnap.size);
-        } catch (error) {
-          console.error('❌ Erro ao buscar usuário:', error);
-          res.status(500).json({ error: 'Erro ao buscar usuário' });
-          return;
-        }
-
-        // Dados de atualização seguindo o formato que funcionava
-        const userUpdateData = {
-          email: email.toLowerCase(),
-          plano: planId,
-          periodo: periodo,
-          isActive: true,
-          isSubscriber: true,
-          subscription: {
-            plan: planId,
-            period: periodo,
-            active: true,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            expiresAt: admin.firestore.Timestamp.fromDate(endDate),
-          },
-          subscriptionStartDate: admin.firestore.Timestamp.fromDate(startDate),
-          subscriptionEndDate: admin.firestore.Timestamp.fromDate(endDate),
-          funcionariosPermitidos: plan.max_funcionarios,
-          atualizadoEm: admin.firestore.FieldValue.serverTimestamp(),
-        };
-
-        if (!usersSnap.empty) {
-          // Atualiza TODOS os documentos que possuem o mesmo email (evita duplicidade de estado)
-          try {
-            const batch = db.batch();
-            usersSnap.docs.forEach((docRef) => {
-              batch.set(docRef.ref, userUpdateData, { merge: true });
-              console.log('📝 Atualizando documento:', docRef.id);
-            });
-            await batch.commit();
-            console.log(`✅ Usuário ${email} atualizado para plano ${planId} (${periodo}) até ${endDate.toISOString()}`);
-          } catch (error) {
-            console.error('❌ Erro ao atualizar usuário:', error);
-            res.status(500).json({ error: 'Erro ao atualizar usuário' });
-            return;
-          }
-        } else {
-          console.warn(`⚠️ Nenhum documento encontrado para email ${email}. Assinatura registrada sem vínculo de usuário.`);
-        }
-      } else {
-        console.log(`📢 Pagamento não aprovado (status: ${status})`);
-      }
-    } else {
-      console.log(`📢 Webhook ignorado (tipo: ${type})`);
-    }
-
-    res.status(200).json({ ok: true });
-    return;
-  } catch (error) {
-    console.error('❌ Erro no webhook:', error);
-    res.status(500).json({ error: 'Erro interno' });
-    return;
-  }
-  }
-);
+// MOVED TO webhooks/mercado-pago.ts to avoid duplication
+// This webhook has better error handling, idempotency, and rate limiting
 
 // ---------- 3. checkPaymentStatus ----------
 export const checkPaymentStatus = onRequest(

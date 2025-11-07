@@ -105,18 +105,31 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     ...((isAdmin || isAdminEmail(user?.email)) ? [{ icon: Gift, label: 'Afiliados', path: '/afiliados', requiredFeature: 'dashboard' }] : []),
   ]; // Removido o .filter() - todas as abas visíveis
 
+  // Verificar se o usuário realmente é admin (verificação rigorosa)
+  // Só considerar admin se o usuário existir E for realmente admin
+  const userIsAdmin = Boolean(
+    user && 
+    user.email && 
+    (isAdmin === true || isAdminEmail(user.email) === true)
+  );
+  
   // Debug: Log admin status
   console.log('🔍 Admin Debug:', {
-    isAdmin,
+    hasUser: !!user,
     userEmail: user?.email,
-    isAdminEmail: isAdminEmail(user?.email),
-    hasAdminAccess: isAdmin || isAdminEmail(user?.email)
+    isAdmin,
+    isAdminEmailResult: isAdminEmail(user?.email),
+    userIsAdmin,
+    willShowAdmin: userIsAdmin
   });
-
-  // FORÇAR ADMIN TEMPORARIAMENTE PARA DEBUG
-  const forceAdmin = true; // Temporário para debug
   
-  const adminItem = (isAdmin || isAdminEmail(user?.email) || forceAdmin) ? [{ icon: Shield, label: 'Admin', path: '/admin', requiredFeature: 'advancedPanel' }] : [];
+  // Exibir item Admin APENAS se o usuário for realmente admin
+  const adminItem = userIsAdmin ? [{ icon: Shield, label: 'Admin', path: '/admin', requiredFeature: 'advancedPanel' }] : [];
+  
+  // Log adicional para debug
+  if (user && !userIsAdmin) {
+    console.log('🚫 Admin item NÃO será exibido para:', user.email);
+  }
   
   const bottomNavItems = [
     { icon: UserCircle, label: 'Perfil', path: '/perfil' },

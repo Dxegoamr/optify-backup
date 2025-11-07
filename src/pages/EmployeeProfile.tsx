@@ -53,7 +53,17 @@ const EmployeeProfile = () => {
   const today = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }).split('/').reverse().join('-');
   const { data: employeeTransactions = [] } = useTransactions(user?.uid || '', today, today);
   
-  const employeeTodayTransactions = employeeTransactions.filter(t => t.employeeId === id);
+  // Filtrar transações do funcionário e excluir ajustes manuais de saldo
+  const employeeTodayTransactions = employeeTransactions
+    .filter(t => 
+      t.employeeId === id && (!t.description || !t.description.includes('Ajuste manual de saldo'))
+    )
+    .sort((a, b) => {
+      // Ordenar por createdAt em ordem decrescente (mais recentes primeiro)
+      const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt || a.date);
+      const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt || b.date);
+      return dateB.getTime() - dateA.getTime();
+    });
 
   // Mutations
   const updateEmployee = useUpdateEmployee();
@@ -502,7 +512,11 @@ const EmployeeProfile = () => {
                   transactions.map((transaction) => (
                     <TableRow key={transaction.id}>
                       <TableCell>
-                        <Badge variant={transaction.type === 'deposit' ? 'default' : 'destructive'}>
+                        <Badge 
+                          className={transaction.type === 'deposit' 
+                            ? 'bg-destructive text-destructive-foreground hover:bg-destructive/80' 
+                            : 'bg-success text-success-foreground hover:bg-success/80'}
+                        >
                           {transaction.type === 'deposit' ? (
                             <div className="flex items-center gap-1">
                               <TrendingUp className="h-3 w-3" />
@@ -531,16 +545,25 @@ const EmployeeProfile = () => {
                         </span>
                       </TableCell>
                       <TableCell>
-                        {new Date(transaction.createdAt?.toDate?.() || transaction.date).toLocaleDateString('pt-BR', {
-                          timeZone: 'America/Sao_Paulo',
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: 'numeric'
-                        })}
+                        {(() => {
+                          const transactionDate = transaction.createdAt?.toDate?.() || new Date(transaction.createdAt || transaction.date);
+                          const dateStr = transactionDate.toLocaleDateString('pt-BR', {
+                            timeZone: 'America/Sao_Paulo',
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric'
+                          });
+                          const timeStr = transactionDate.toLocaleTimeString('pt-BR', {
+                            timeZone: 'America/Sao_Paulo',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          });
+                          return `${dateStr} ${timeStr}`;
+                        })()}
                       </TableCell>
                       <TableCell>
-                        <span className={transaction.type === 'deposit' ? 'text-success' : 'text-destructive'}>
-                          {transaction.type === 'deposit' ? '+' : '-'}R${' '}
+                        <span className={transaction.type === 'deposit' ? 'text-destructive' : 'text-success'}>
+                          {transaction.type === 'deposit' ? '-' : '+'}R${' '}
                           {Number(transaction.amount).toLocaleString('pt-BR')}
                         </span>
                       </TableCell>
