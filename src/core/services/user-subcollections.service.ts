@@ -83,6 +83,19 @@ export class UserSubcollectionsService {
         Object.entries(data).filter(([_, value]) => value !== undefined)
       );
       
+      // PROTEÇÃO ESPECIAL PARA RESUMOS DIÁRIOS: Não sobrescrever transactionsSnapshot se já existe
+      if (subcollection === 'dailySummaries' && 'transactionsSnapshot' in cleanData) {
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const existingData = docSnap.data();
+          // Se já existe um snapshot (dia fechado), preservá-lo e não permitir alteração
+          if (existingData?.transactionsSnapshot && Array.isArray(existingData.transactionsSnapshot) && existingData.transactionsSnapshot.length > 0) {
+            // Remover transactionsSnapshot do cleanData para não sobrescrever
+            delete cleanData.transactionsSnapshot;
+          }
+        }
+      }
+      
       // Verificar se o documento existe, se não existir, criar
       const docSnap = await getDoc(docRef);
       
@@ -181,7 +194,8 @@ export const USER_SUBCOLLECTIONS = {
   ACCOUNTS: 'accounts',
   PAYMENTS: 'payments',
   GOALS: 'goals',
-  REPORTS: 'reports'
+  REPORTS: 'reports',
+  SUREBET_RECORDS: 'surebetRecords'
 } as const;
 
 // Remoção completa dos dados de um usuário (todas as subcoleções)

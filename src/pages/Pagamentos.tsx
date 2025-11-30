@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
 import { useEmployees, useUpdateEmployee } from '@/hooks/useFirestore';
 import type { Payment } from '@/types';
+import { DollarSign } from 'lucide-react';
 
 const Pagamentos = () => {
   const { user } = useFirebaseAuth();
@@ -180,6 +181,9 @@ const Pagamentos = () => {
       >
         <div className="space-y-6 animate-fade-in">
           <div>
+            <Badge className="rounded-full bg-primary/10 px-4 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-primary mb-4">
+              Pagamentos
+            </Badge>
             <h1 className="text-4xl font-bold mb-2">Pagamentos</h1>
             <p className="text-muted-foreground">Gerencie os pagamentos dos funcionários</p>
           </div>

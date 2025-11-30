@@ -12,6 +12,7 @@ const Signup = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { signUp, user } = useFirebaseAuth();
@@ -24,6 +25,19 @@ const Signup = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Validar campos obrigatórios
+    if (!phone.trim()) {
+      toast.error('O número de celular é obrigatório');
+      return;
+    }
+
+    // Validar formato do telefone (mínimo 10 caracteres para DDD + número)
+    const phoneDigits = phone.replace(/\D/g, '');
+    if (phoneDigits.length < 10) {
+      toast.error('Por favor, insira um número de celular válido (DDD + número)');
+      return;
+    }
+
     if (password !== confirmPassword) {
       toast.error('As senhas não coincidem');
       return;
@@ -32,7 +46,7 @@ const Signup = () => {
     setLoading(true);
 
     try {
-      await signUp(email, password, '');
+      await signUp(email, password, '', phone.trim());
       toast.success('Cadastro realizado com sucesso!');
       navigate('/basic-info');
     } catch (error: any) {
@@ -148,6 +162,22 @@ const Signup = () => {
               required
               minLength={6}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="phone" className="text-sm font-medium text-foreground">
+              Celular <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="phone"
+              type="tel"
+              placeholder="(11) 99999-9999"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="h-12 border-border/50 focus:border-primary transition-colors"
+              required
+            />
+            <p className="text-xs text-muted-foreground">O número de celular é obrigatório</p>
           </div>
 
           <Button 

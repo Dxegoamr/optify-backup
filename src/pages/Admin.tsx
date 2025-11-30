@@ -11,6 +11,9 @@ const Admin = () => {
     <DashboardLayout>
       <div className="space-y-6 animate-fade-in">
         <div>
+          <Badge className="rounded-full bg-primary/10 px-4 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-primary mb-4">
+            Administração
+          </Badge>
           <div className="flex items-center gap-3 mb-2">
             <h1 className="text-4xl font-bold">Painel Administrativo</h1>
             {isAdmin && (

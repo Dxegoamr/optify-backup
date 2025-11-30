@@ -15,6 +15,7 @@ import { ptBR } from 'date-fns/locale';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
 import { useAllDailySummaries, useEmployees, usePlatforms, useUpdateDailySummary, useDeleteDailySummary } from '@/hooks/useFirestore';
 import { toast } from 'sonner';
+import { shouldDisplayAsPositive } from '@/utils/financial-calculations';
 
 const Historico = () => {
   const { user } = useFirebaseAuth();
@@ -87,6 +88,9 @@ const Historico = () => {
           {/* Header */}
           <div className="flex items-center justify-between">
             <div>
+              <Badge className="rounded-full bg-primary/10 px-4 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-primary mb-4">
+                Histórico
+              </Badge>
               <h1 className="text-3xl font-bold text-foreground">Histórico de Fechamentos</h1>
               <p className="text-muted-foreground mt-2">
                 Visualize o histórico de todos os fechamentos de dia.
@@ -225,7 +229,7 @@ const Historico = () => {
                         >
                           <div className="flex items-center gap-3">
                             <Badge 
-                              variant={transaction.type === 'deposit' ? 'default' : 'destructive'}
+                              variant={transaction.type === 'withdraw' ? 'default' : 'destructive'}
                             >
                               {transaction.type === 'deposit' ? 'Depósito' : 'Saque'}
                             </Badge>
@@ -238,8 +242,8 @@ const Historico = () => {
                               </div>
                             </div>
                           </div>
-                          <div className={`font-bold ${transaction.type === 'deposit' ? 'text-success' : 'text-destructive'}`}>
-                            {transaction.type === 'deposit' ? '+' : '-'}{formatCurrency(transaction.amount)}
+                          <div className={`font-bold ${shouldDisplayAsPositive(transaction) ? 'text-success' : 'text-destructive'}`}>
+                            {shouldDisplayAsPositive(transaction) ? '+' : '-'}{formatCurrency(transaction.amount)}
                           </div>
                         </div>
                       ))}

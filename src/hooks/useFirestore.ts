@@ -152,7 +152,19 @@ export const useDeleteTransaction = () => {
   const { user } = useFirebaseAuth();
   
   return useMutation({
-    mutationFn: (id: string) => UserTransactionService.deleteTransaction(user?.uid || '', id),
+    mutationFn: (params: string | { id: string; skipDailySummaryUpdate?: boolean }) => {
+      if (typeof params === 'string') {
+        // Compatibilidade: aceita string diretamente
+        return UserTransactionService.deleteTransaction(user?.uid || '', params);
+      } else {
+        // Nova forma: aceita objeto com id e opções
+        return UserTransactionService.deleteTransaction(
+          user?.uid || '', 
+          params.id, 
+          { skipDailySummaryUpdate: params.skipDailySummaryUpdate }
+        );
+      }
+    },
     onSuccess: () => {
       // Invalidar todas as queries relacionadas a transações
       queryClient.invalidateQueries({ queryKey: ['firebase-transactions'] });

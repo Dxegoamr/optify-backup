@@ -248,3 +248,15 @@ export default MercadoPagoCheckout;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+

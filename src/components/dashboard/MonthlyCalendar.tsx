@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, Lock } from 'lucide-react';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
 import { useTransactions, useAllDailySummaries } from '@/hooks/useFirestore';
-import { getCurrentDateInSaoPaulo, formatDateInSaoPaulo } from '@/utils/timezone';
+import { getCurrentDateInSaoPaulo, formatDateInSaoPaulo, getCurrentDateStringInSaoPaulo } from '@/utils/timezone';
+import { calculateProfit, isSameDate } from '@/utils/financial-calculations';
 import { usePlanLimitations } from '@/hooks/usePlanLimitations';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -24,21 +25,13 @@ const MonthlyCalendar = () => {
   // Buscar todas as transações (não fechadas ainda)
   const { data: allTransactions = [] } = useTransactions(user?.uid || '');
   
-  // Debug logs
-  console.log('MonthlyCalendar - Historical Summaries:', historicalSummaries);
-  console.log('MonthlyCalendar - Historical Summaries length:', historicalSummaries?.length || 0);
-  console.log('MonthlyCalendar - All Transactions:', allTransactions);
-  console.log('MonthlyCalendar - All Transactions length:', allTransactions?.length || 0);
-  console.log('MonthlyCalendar - Current Date:', currentDate);
-  console.log('MonthlyCalendar - User ID:', user?.uid);
-  
-  // Calcular lucros diários usando Map (como no Optify original)
+  // Calcular lucros diários - CORRIGIDO para seguir mesma lógica do Dashboard
   const dailyProfits = useMemo(() => {
     const profits = new Map<string, number>();
+    const closedDates = new Set<string>();
+    const today = getCurrentDateStringInSaoPaulo();
     
-    console.log('Calculating daily profits...');
-    
-    // 1️⃣ PROCESSAR HISTÓRICO (dias fechados)
+    // 1️⃣ PROCESSAR DIAS FECHADOS (EXCETO HOJE)
     historicalSummaries.forEach((summary: any) => {
       // Converter data para string "YYYY-MM-DD"
       let dateKey: string;
@@ -53,32 +46,48 @@ const MonthlyCalendar = () => {
         dateKey = format(new Date(summary.date), 'yyyy-MM-dd');
       }
       
-      console.log(`Adding historical profit for ${dateKey}: ${summary.profit || summary.margin}`);
+      // ❗ Nunca usar resumos do dia atual - sempre calcular das transações
+      if (isSameDate(dateKey, today)) {
+        return;
+      }
+      
+      closedDates.add(dateKey);
       profits.set(dateKey, summary.profit || summary.margin || 0);
     });
     
-    // 2️⃣ PROCESSAR TODAS AS TRANSAÇÕES POR DIA (não fechadas ainda)
+    // 2️⃣ AGRUPAR TRANSAÇÕES POR DIA
+    const transactionsByDate = new Map<string, any[]>();
+    
     allTransactions.forEach((transaction: any) => {
       const transactionDate = transaction.date;
-      console.log(`Processing transaction for date ${transactionDate}:`, transaction);
       
-      // Calcular lucro desta transação
-      const transactionProfit = transaction.type === 'withdraw' ? transaction.amount : -transaction.amount;
+      // ❗ Se dia está fechado (e não é hoje), ignorar transações
+      if (closedDates.has(transactionDate) && !isSameDate(transactionDate, today)) {
+        return;
+      }
       
-      // Se já existe lucro para este dia, somar
-      if (profits.has(transactionDate)) {
-        const currentProfit = profits.get(transactionDate) || 0;
-        const newProfit = currentProfit + transactionProfit;
-        console.log(`Adding to existing profit for ${transactionDate}: ${currentProfit} + ${transactionProfit} = ${newProfit}`);
-        profits.set(transactionDate, newProfit);
+      if (!transactionsByDate.has(transactionDate)) {
+        transactionsByDate.set(transactionDate, []);
+      }
+      
+      transactionsByDate.get(transactionDate)!.push(transaction);
+    });
+    
+    // 3️⃣ CALCULAR LUCRO POR DIA usando função reutilizável
+    transactionsByDate.forEach((transactions, date) => {
+      const dayProfit = calculateProfit(transactions);
+      
+      // DIA ATUAL — SUBSTITUIR SEMPRE
+      if (isSameDate(date, today)) {
+        profits.set(date, dayProfit);
       } else {
-        // Se não existe, criar novo
-        console.log(`Creating new profit for ${transactionDate}: ${transactionProfit}`);
-        profits.set(transactionDate, transactionProfit);
+        // DIAS NÃO FECHADOS
+        if (!closedDates.has(date)) {
+          profits.set(date, dayProfit);
+        }
       }
     });
     
-    console.log('Final daily profits Map:', Array.from(profits.entries()));
     return profits;
   }, [historicalSummaries, allTransactions]);
 
@@ -111,12 +120,7 @@ const MonthlyCalendar = () => {
   const getProfitForDay = (day: number) => {
     const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
     const dateStr = format(date, 'yyyy-MM-dd');
-    
-    console.log(`Looking for profit for day ${day}, date string: ${dateStr}`);
-    
     const profit = dailyProfits.get(dateStr);
-    console.log(`Profit found for day ${day}:`, profit);
-    
     return profit;
   };
 

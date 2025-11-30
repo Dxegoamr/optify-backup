@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { TrendingUp, TrendingDown, Calendar as CalendarIcon, ArrowUp, ArrowDown, Target, Trophy, Lock, Filter, X } from 'lucide-react';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
 import { useEmployees, useTransactions, usePlatforms, useDeleteTransaction } from '@/hooks/useFirestore';
+import { shouldDisplayAsPositive } from '@/utils/financial-calculations';
 import { useQueryClient } from '@tanstack/react-query';
 import { getCurrentDateInSaoPaulo, formatDateInSaoPaulo, getCurrentDateStringInSaoPaulo } from '@/utils/timezone';
 import { UserDailySummaryService } from '@/core/services/user-specific.service';
@@ -18,6 +19,7 @@ import { pt } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, ReferenceLine } from 'recharts';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useGlobalFinancialState, getDailyProfit, getEmployeeState, getPlatformState } from '@/hooks/useGlobalFinancialState';
 
 const ResumoDia = () => {
   const { user } = useFirebaseAuth();
@@ -46,7 +48,10 @@ const ResumoDia = () => {
     }
   }, [searchParams]);
   
-  // Buscar dados do Firebase
+  // Buscar estado financeiro global
+  const { data: financialState, isLoading: financialStateLoading } = useGlobalFinancialState(user?.uid);
+  
+  // Buscar dados auxiliares
   const { data: employees = [] } = useEmployees(user?.uid || '');
   const { data: platforms = [] } = usePlatforms(user?.uid || '');
   const { data: allTransactions = [] } = useTransactions(user?.uid || '');
@@ -54,14 +59,8 @@ const ResumoDia = () => {
   
   // Filtrar transações do dia selecionado
   const todayTransactions = allTransactions.filter((transaction: any) => {
-    console.log('Comparando:', transaction.date, '===', selectedDateString, '?', transaction.date === selectedDateString);
     return transaction.date === selectedDateString;
   });
-  
-  console.log('ResumoDia - selectedDateString:', selectedDateString);
-  console.log('ResumoDia - allTransactions:', allTransactions);
-  console.log('ResumoDia - allTransactions dates:', allTransactions.map((t: any) => ({ id: t.id, date: t.date, type: t.type, amount: t.amount })));
-  console.log('ResumoDia - todayTransactions (filtradas):', todayTransactions);
   
   // Capturar transações do dia original quando a página carrega
   useEffect(() => {
@@ -74,8 +73,6 @@ const ResumoDia = () => {
       if (originalTransactions.length > 0) {
         setOriginalDayTransactions(originalTransactions);
         setOriginalDayDate(originalDate);
-        console.log('ResumoDia - Transações do dia original capturadas:', originalTransactions);
-        console.log('ResumoDia - Data original:', originalDate);
       }
     }
   }, [allTransactions, originalDayTransactions.length]);
@@ -114,34 +111,35 @@ const ResumoDia = () => {
 
   const filteredTransactions = getFilteredTransactions();
 
-  // Calcular estatísticas do dia
-  const deposits = todayTransactions.filter((t: any) => t.type === 'deposit');
-  const withdraws = todayTransactions.filter((t: any) => t.type === 'withdraw');
-  const totalDeposits = deposits.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
-  const totalWithdraws = withdraws.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
-  const profit = totalWithdraws - totalDeposits;
+  // Obter estatísticas do dia usando estado global
+  const dayState = financialState?.daily[selectedDateString] || { profit: 0, deposits: 0, withdraws: 0 };
+  const profit = dayState.profit;
+  const totalDeposits = dayState.deposits;
+  const totalWithdraws = dayState.withdraws;
   const transactionCount = filteredTransactions.length;
   
-  console.log('ResumoDia - Cálculos:');
-  console.log('- deposits:', deposits);
-  console.log('- withdraws:', withdraws);
-  console.log('- totalDeposits:', totalDeposits);
-  console.log('- totalWithdraws:', totalWithdraws);
-  console.log('- profit:', profit);
-  console.log('- transactionCount:', transactionCount);
+  // Deposits e withdraws para exibição
+  const deposits = todayTransactions.filter((t: any) => 
+    t.type === 'deposit' || (t.description && t.description.startsWith('Surebet'))
+  );
+  const withdraws = todayTransactions.filter((t: any) => t.type === 'withdraw');
 
-  // Calcular estatísticas por plataforma
+  // Calcular estatísticas por plataforma (para o dia específico)
   const platformStats = platforms.map((platform: any) => {
     const platformTransactions = todayTransactions.filter((t: any) => t.platformId === platform.id);
+    const platformSurebet = platformTransactions
+      .filter((t: any) => t.description && t.description.startsWith('Surebet'))
+      .reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
     const platformDeposits = platformTransactions
-      .filter((t: any) => t.type === 'deposit')
+      .filter((t: any) => t.type === 'deposit' && (!t.description || !t.description.startsWith('Surebet')))
       .reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
     const platformWithdraws = platformTransactions
       .filter((t: any) => t.type === 'withdraw')
       .reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
-    const platformProfit = platformWithdraws - platformDeposits;
+    const platformProfit = platformWithdraws - platformDeposits + platformSurebet;
     
     return {
+      id: platform.id,
       name: platform.name,
       color: platform.color,
       deposits: platformDeposits,
@@ -149,108 +147,106 @@ const ResumoDia = () => {
       profit: platformProfit,
       transactions: platformTransactions.length
     };
-  }).filter(stat => stat.transactions > 0).sort((a, b) => b.profit - a.profit);
+  }).filter(stat => stat.transactions > 0 || stat.profit !== 0).sort((a, b) => b.profit - a.profit);
 
-  // Calcular estatísticas por funcionário
+  // Calcular estatísticas por funcionário (para o dia específico)
   const employeeStats = employees.map((employee: any) => {
     const employeeTransactions = todayTransactions.filter((t: any) => t.employeeId === employee.id);
+    const employeeSurebet = employeeTransactions
+      .filter((t: any) => t.description && t.description.startsWith('Surebet'))
+      .reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
     const employeeDeposits = employeeTransactions
-      .filter((t: any) => t.type === 'deposit')
+      .filter((t: any) => t.type === 'deposit' && (!t.description || !t.description.startsWith('Surebet')))
       .reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
     const employeeWithdraws = employeeTransactions
       .filter((t: any) => t.type === 'withdraw')
       .reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
-    const employeeProfit = employeeWithdraws - employeeDeposits;
+    const employeeProfit = employeeWithdraws - employeeDeposits + employeeSurebet;
     
     return {
+      id: employee.id,
       name: employee.name,
       deposits: employeeDeposits,
       withdraws: employeeWithdraws,
       profit: employeeProfit,
       transactions: employeeTransactions.length
     };
-  }).filter(stat => stat.transactions > 0).sort((a, b) => b.profit - a.profit);
+  }).filter(stat => stat.transactions > 0 || stat.profit !== 0).sort((a, b) => b.profit - a.profit);
 
   // Encontrar melhor plataforma e funcionário do dia
   const bestPlatform = platformStats[0];
   const bestEmployee = employeeStats[0];
 
-  // Função para fechar o dia
+  // Função para fechar o dia - REFATORADA COMPLETAMENTE
   const handleCloseDay = async () => {
     try {
-      // CORREÇÃO: Usar transações do dia original se disponíveis
-      const transactionsToClose = originalDayTransactions.length > 0 ? originalDayTransactions : todayTransactions;
-      const dateToClose = originalDayDate || selectedDateString;
-      
-      const depositsToClose = transactionsToClose.filter((t: any) => t.type === 'deposit');
-      const withdrawsToClose = transactionsToClose.filter((t: any) => t.type === 'withdraw');
-      const totalDepositsToClose = depositsToClose.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
-      const totalWithdrawsToClose = withdrawsToClose.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
-      const profitToClose = totalWithdrawsToClose - totalDepositsToClose;
-      
-      console.log('Fechando dia - Data:', dateToClose);
-      console.log('Fechando dia - Transações originais:', originalDayTransactions);
-      console.log('Fechando dia - Transações selecionadas:', transactionsToClose);
-      console.log('Fechando dia - Total Deposits:', totalDepositsToClose);
-      console.log('Fechando dia - Total Withdraws:', totalWithdrawsToClose);
-      console.log('Fechando dia - Profit:', profitToClose);
-      
       if (!user?.uid) {
         toast.error('Usuário não autenticado');
         return;
       }
 
-      // Verificar se já existe um fechamento para este dia
+      // CORREÇÃO: Usar transações do dia original se disponíveis
+      const transactionsToClose = originalDayTransactions.length > 0 ? originalDayTransactions : todayTransactions;
+      const dateToClose = originalDayDate || selectedDateString;
+      
+      if (transactionsToClose.length === 0) {
+        toast.error('Não há transações para fechar');
+        return;
+      }
+
+      // ========== NOVA ORDEM CORRETA ==========
+      
+      // 1. CAPTURAR SNAPSHOT DAS TRANSAÇÕES (antes de deletar)
+      const transactionsSnapshot = [...transactionsToClose];
+      
+      // 2. DELETAR TODAS AS TRANSAÇÕES SEM RECALCULAR RESUMO
+      // Usar skipDailySummaryUpdate: true para evitar recálculos parciais
+      for (const transaction of transactionsToClose) {
+        await deleteTransactionMutation.mutateAsync({
+          id: transaction.id,
+          skipDailySummaryUpdate: true
+        });
+      }
+      
+      // 3. AGORA QUE TODAS AS TRANSAÇÕES FORAM DELETADAS, CRIAR/ATUALIZAR O RESUMO
+      // Usar função reutilizável para calcular lucro
+      const { calculateProfit, calculateTotalDeposits, calculateTotalWithdraws } = await import('@/utils/financial-calculations');
+      
+      const profitToClose = calculateProfit(transactionsSnapshot);
+      const totalDepositsToClose = calculateTotalDeposits(transactionsSnapshot);
+      const totalWithdrawsToClose = calculateTotalWithdraws(transactionsSnapshot);
+      
+      // Verificar se já existe um resumo para este dia
       const existingSummaries = await UserDailySummaryService.getAllDailySummaries(user.uid);
       const existingSummary = existingSummaries.find((s: any) => s.date === dateToClose);
       
-      let summaryData;
-      
-      if (existingSummary) {
-        // Se já existe, somar aos valores existentes
-        summaryData = {
-          date: dateToClose,
-          totalDeposits: (existingSummary.totalDeposits || 0) + totalDepositsToClose,
-          totalWithdraws: (existingSummary.totalWithdraws || 0) + totalWithdrawsToClose,
-          profit: (existingSummary.profit || existingSummary.margin || 0) + profitToClose,
-          transactionCount: (existingSummary.transactionCount || 0) + transactionsToClose.length,
-          transactionsSnapshot: [...(existingSummary.transactionsSnapshot || []), ...transactionsToClose],
-          byEmployee: [],
-          margin: (existingSummary.profit || existingSummary.margin || 0) + profitToClose,
-          createdAt: existingSummary.createdAt,
-          updatedAt: new Date(),
-        };
-        
-        console.log('Atualizando fechamento existente:', summaryData);
-        // CORREÇÃO: Usar update em vez de create para evitar duplicação
-        await UserDailySummaryService.updateDailySummary(user.uid, existingSummary.id, summaryData);
-      } else {
-        // Se não existe, criar novo
-        summaryData = {
+      const summaryData = {
         date: dateToClose,
         totalDeposits: totalDepositsToClose,
         totalWithdraws: totalWithdrawsToClose,
         profit: profitToClose,
-        transactionCount: transactionsToClose.length,
-        transactionsSnapshot: transactionsToClose,
+        margin: profitToClose,
+        transactionCount: transactionsSnapshot.length,
+        transactionsSnapshot: transactionsSnapshot, // Snapshot imutável do fechamento
         byEmployee: [],
-          margin: profitToClose,
-        createdAt: new Date(),
+        createdAt: existingSummary?.createdAt || new Date(),
         updatedAt: new Date(),
-        };
-        
-        console.log('Criando novo fechamento:', summaryData);
+      };
+      
+      if (existingSummary) {
+        // Atualizar resumo existente
+        await UserDailySummaryService.updateDailySummary(user.uid, existingSummary.id, summaryData);
+      } else {
+        // Criar novo resumo
         await UserDailySummaryService.createDailySummary(user.uid, summaryData as any);
       }
       
-      // Deletar todas as transações do dia
-      const deletePromises = transactionsToClose.map((transaction: any) => 
-        deleteTransactionMutation.mutateAsync(transaction.id)
-      );
-      await Promise.all(deletePromises);
-      
       toast.success('Dia fechado com sucesso!');
       setCloseDialogOpen(false);
+      
+      // Invalidar queries para atualizar a interface
+      queryClient.invalidateQueries({ queryKey: ['firebase-transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['firebase-daily-summaries'] });
       
       // Redirecionar para o dashboard
       setTimeout(() => {
@@ -286,9 +282,9 @@ const ResumoDia = () => {
       const transactionsToSave = originalDayTransactions.length > 0 ? originalDayTransactions : todayTransactions;
       const depositsToSave = transactionsToSave.filter((t: any) => t.type === 'deposit');
       const withdrawsToSave = transactionsToSave.filter((t: any) => t.type === 'withdraw');
-      const totalDepositsToSave = depositsToSave.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
-      const totalWithdrawsToSave = withdrawsToSave.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
-      const profitToSave = totalWithdrawsToSave - totalDepositsToSave;
+  const totalDepositsToSave = depositsToSave.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+  const totalWithdrawsToSave = withdrawsToSave.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+  const profitToSave = totalWithdrawsToSave - totalDepositsToSave;
       
       console.log('Dados a serem salvos:');
       console.log('- transactionsToSave:', transactionsToSave);
@@ -382,6 +378,9 @@ const ResumoDia = () => {
       <div className="space-y-6 animate-fade-in">
         <div className="flex items-center justify-between">
           <div>
+            <Badge className="rounded-full bg-primary/10 px-4 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-primary mb-4">
+              Resumo
+            </Badge>
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-4xl font-bold">Resumo do Dia</h1>
               {activeFilter && (
@@ -495,7 +494,7 @@ const ResumoDia = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-2">Total de Depósitos</p>
-                <p className="text-3xl font-bold text-destructive">R$ {totalDeposits.toLocaleString('pt-BR')}</p>
+                <p className="text-3xl font-bold text-success">R$ {totalDeposits.toLocaleString('pt-BR')}</p>
               </div>
               <div className="p-3 bg-gradient-primary rounded-xl shadow-glow">
                 <ArrowDown className="h-6 w-6 text-primary-foreground" />
@@ -507,7 +506,7 @@ const ResumoDia = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-2">Total de Saques</p>
-                <p className="text-3xl font-bold text-success">R$ {totalWithdraws.toLocaleString('pt-BR')}</p>
+                <p className="text-3xl font-bold text-destructive">R$ {totalWithdraws.toLocaleString('pt-BR')}</p>
               </div>
               <div className="p-3 bg-gradient-primary rounded-xl shadow-glow">
                 <ArrowUp className="h-6 w-6 text-primary-foreground" />
@@ -1249,18 +1248,29 @@ const ResumoDia = () => {
                               style={{ backgroundColor: (platform as any).color }}
                             />
                           )}
-                          {(platform as any)?.name || 'N/A'}
+                          {transaction.description || (platform as any)?.name || 'N/A'}
                         </div>
                       </td>
                       <td className="p-4 text-center">
-                        <Badge variant={transaction.type === 'withdraw' ? 'default' : 'destructive'}>
-                          {transaction.type === 'deposit' ? 'Depósito' : 'Saque'}
+                        <Badge 
+                          variant={transaction.type === 'withdraw' ? 'default' : 'destructive'}
+                          style={{ 
+                            backgroundColor: transaction.description && transaction.description.startsWith('Surebet')
+                              ? '#86efac' // Verde claro para Surebet
+                              : undefined
+                          }}
+                        >
+                          {transaction.description && transaction.description.startsWith('FreeBet')
+                            ? transaction.description.split(' ')[0]
+                            : transaction.description && transaction.description.startsWith('Surebet')
+                              ? 'Surebet'
+                              : (transaction.type === 'deposit' ? 'Depósito' : 'Saque')}
                         </Badge>
                       </td>
                       <td className={`p-4 text-right font-semibold ${
-                        transaction.type === 'withdraw' ? 'text-success' : 'text-destructive'
+                        shouldDisplayAsPositive(transaction) ? 'text-success' : 'text-destructive'
                       }`}>
-                        {transaction.type === 'deposit' ? '-' : '+'}R$ {Number(transaction.amount || 0).toLocaleString('pt-BR')}
+                        {shouldDisplayAsPositive(transaction) ? '+' : '-'}R$ {Number(transaction.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                       <td className="p-4 text-center text-sm text-muted-foreground">
                         {new Date(transaction.createdAt?.toDate?.() || transaction.createdAt).toLocaleTimeString('pt-BR')}

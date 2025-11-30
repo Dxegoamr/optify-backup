@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { Plus, Edit, Trash2, Search } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
@@ -120,17 +121,23 @@ const Saldos = () => {
             (t: any) => !t.description || !t.description.includes('Ajuste manual de saldo')
           );
           
-          const deposits = normalTransactions
-          .filter((t: any) => t.type === 'deposit')
-          .reduce((s: number, t: any) => s + Number(t.amount || 0), 0);
+          // CORREÇÃO: Separar Surebet dos depósitos normais (seguindo regras oficiais)
+          const surebetTransactions = normalTransactions.filter((t: any) => 
+            t.description && t.description.startsWith('Surebet')
+          );
+          const otherDeposits = normalTransactions.filter((t: any) =>
+            t.type === 'deposit' && (!t.description || !t.description.startsWith('Surebet'))
+          );
+          const withdraws = normalTransactions.filter((t: any) => t.type === 'withdraw');
+          
+          const totalSurebetProfit = surebetTransactions.reduce((s: number, t: any) => s + Number(t.amount || 0), 0);
+          const deposits = otherDeposits.reduce((s: number, t: any) => s + Number(t.amount || 0), 0);
+          const totalWithdraws = withdraws.reduce((s: number, t: any) => s + Number(t.amount || 0), 0);
         
-          const withdraws = normalTransactions
-          .filter((t: any) => t.type === 'withdraw')
-          .reduce((s: number, t: any) => s + Number(t.amount || 0), 0);
+        console.log(`Debug - Deposits: ${deposits}, Withdraws: ${totalWithdraws}, Surebet: ${totalSurebetProfit}`);
         
-        console.log(`Debug - Deposits: ${deposits}, Withdraws: ${withdraws}`);
-        
-        const balance = deposits - withdraws; // Saldo real (pode ser negativo)
+        // CORREÇÃO: Surebet sempre positivo no saldo
+        const balance = totalWithdraws - deposits + totalSurebetProfit;
         balances[emp.id].platforms[plat.id] = Math.max(0, balance); // Exibir apenas valores positivos
         balances[emp.id].total += Math.max(0, balance);
         }
@@ -346,6 +353,9 @@ const Saldos = () => {
         <div className="space-y-6 animate-fade-in">
           <div className="flex items-center justify-between">
             <div>
+              <Badge className="rounded-full bg-primary/10 px-4 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-primary mb-4">
+                Saldos
+              </Badge>
               <h1 className="text-4xl font-bold mb-2">Saldos</h1>
               <p className="text-muted-foreground">Gerencie contas e saldos por plataforma</p>
             </div>
@@ -460,7 +470,7 @@ const Saldos = () => {
         <Card className="p-6 shadow-card gradient-success">
           <p className="text-sm text-success-foreground/80 mb-2">Saldo Total</p>
           <p className="text-4xl font-bold text-success-foreground">
-            R$ {Number(totalBalance || 0).toLocaleString('pt-BR')}
+            R$ {Number(totalBalance || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
         </Card>
 
@@ -585,7 +595,7 @@ const Saldos = () => {
                       </td>
                       <td className="p-4 text-center font-bold sticky left-20 bg-background z-10">
                         <span className="text-success">
-                          R$ {((empBalance as any)?.total || 0).toLocaleString('pt-BR')}
+                          R$ {((empBalance as any)?.total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </td>
                       {sortedPlatforms.map((plat: any) => {
@@ -621,7 +631,7 @@ const Saldos = () => {
                                 className="text-success cursor-pointer hover:bg-muted/50 p-1 rounded"
                                 onClick={() => startEditingBalance(emp.id, plat.id, currentValue)}
                               >
-                                R$ {currentValue.toLocaleString('pt-BR')}
+                                R$ {currentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                             )}
                     </td>

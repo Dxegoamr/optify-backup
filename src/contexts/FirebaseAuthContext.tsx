@@ -21,7 +21,7 @@ interface FirebaseAuthContextType {
   isAdmin: boolean;
   customClaims: Record<string, any> | null;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, name: string) => Promise<void>;
+  signUp: (email: string, password: string, name: string, phone?: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshClaims: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -133,7 +133,7 @@ export const FirebaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   };
 
-  const signUp = async (email: string, password: string, name: string) => {
+  const signUp = async (email: string, password: string, name: string, phone?: string) => {
     try {
       const { user } = await createUserWithEmailAndPassword(auth, email, password);
       if (name) {
@@ -147,6 +147,13 @@ export const FirebaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
         displayName: name,
         plano: 'free' // Plano padrão
       });
+
+      // Se telefone foi fornecido, atualizar informações pessoais
+      if (phone && phone.trim()) {
+        await UserProfileService.updateUserPersonalInfo(user.uid, {
+          phone: phone.trim()
+        });
+      }
       
       console.log(`✅ Usuário ${email} criado com sucesso no Firestore`);
     } catch (error) {

@@ -202,16 +202,21 @@ const GestaoFuncionarios = () => {
     (emp.email && emp.email.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  // Calcular totais do dia
-  const totalDeposits = todayTransactions
-    .filter(t => t.type === 'deposit')
-    .reduce((sum, t) => sum + (t.amount || 0), 0);
+  // CORREÇÃO: Calcular totais do dia separando Surebet (seguindo regras oficiais)
+  const surebetTransactions = todayTransactions.filter((t: any) => 
+    t.description && t.description.startsWith('Surebet')
+  );
+  const otherDeposits = todayTransactions.filter((t: any) =>
+    t.type === 'deposit' && (!t.description || !t.description.startsWith('Surebet'))
+  );
+  const withdraws = todayTransactions.filter((t: any) => t.type === 'withdraw');
+  
+  const totalSurebetProfit = surebetTransactions.reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
+  const totalDeposits = otherDeposits.reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
+  const totalWithdraws = withdraws.reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
     
-  const totalWithdraws = todayTransactions
-    .filter(t => t.type === 'withdraw')
-    .reduce((sum, t) => sum + (t.amount || 0), 0);
-    
-  const dailyBalance = totalWithdraws - totalDeposits;
+  // CORREÇÃO: Surebet sempre positivo no saldo
+  const dailyBalance = totalWithdraws - totalDeposits + totalSurebetProfit;
 
   const getDayProfitLoss = (employee: any) => {
     const employeeTodayTransactions = todayTransactions.filter(
@@ -235,6 +240,9 @@ const GestaoFuncionarios = () => {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
+            <Badge className="rounded-full bg-primary/10 px-4 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-primary mb-4">
+              Funcionários
+            </Badge>
             <h1 className="text-4xl font-bold mb-2">Gestão de Funcionários</h1>
             <p className="text-muted-foreground">Gerencie sua equipe e transações</p>
           </div>

@@ -65,11 +65,22 @@ export interface UserAccount {
 export class UserEmployeeService {
   static async createEmployee(userId: string, employeeData: Omit<UserEmployee, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
     console.log('UserEmployeeService.createEmployee - dados recebidos:', { userId, employeeData });
-    return UserSubcollectionsService.addToUserSubcollection(
+    const employeeId = await UserSubcollectionsService.addToUserSubcollection(
       userId, 
       USER_SUBCOLLECTIONS.EMPLOYEES, 
       employeeData
     );
+    
+    // Enviar notificação de novo funcionário
+    try {
+      const { sendNewEmployeeNotification } = await import('@/core/services/user-notifications.service');
+      await sendNewEmployeeNotification(userId, employeeData.name, employeeId);
+    } catch (error) {
+      console.error('Erro ao enviar notificação de novo funcionário:', error);
+      // Não falhar a criação do funcionário se a notificação falhar
+    }
+    
+    return employeeId;
   }
 
   static async getEmployees(userId: string): Promise<UserEmployee[]> {
@@ -204,12 +215,81 @@ export class UserTransactionService {
     );
   }
 
-  static async deleteTransaction(userId: string, transactionId: string): Promise<void> {
-    return UserSubcollectionsService.deleteFromUserSubcollection(
+  static async deleteTransaction(
+    userId: string, 
+    transactionId: string, 
+    options?: { skipDailySummaryUpdate?: boolean }
+  ): Promise<void> {
+    // Buscar a transação antes de excluir
+    const allTransactions = await this.getTransactions(userId, 1000);
+    const transaction = allTransactions.find(t => t.id === transactionId);
+    const transactionDate = transaction?.date;
+    
+    // Excluir a transação
+    await UserSubcollectionsService.deleteFromUserSubcollection(
       userId, 
       USER_SUBCOLLECTIONS.TRANSACTIONS, 
       transactionId
     );
+    
+    // Se skipDailySummaryUpdate está true, pular completamente o recálculo
+    if (options?.skipDailySummaryUpdate) {
+      return;
+    }
+    
+    // Se encontrou a transação e não deve pular atualização, recalcular o resumo diário
+    if (transaction && transactionDate) {
+      try {
+        const existingSummary = await UserDailySummaryService.getDailySummaryByDate(userId, transactionDate);
+        
+        // PROTEÇÃO: Se o dia está fechado (tem resumo com snapshot), não alterar o resumo
+        // Apenas recálculos manuais poderiam alterar resumos fechados
+        if (existingSummary && existingSummary.transactionsSnapshot && Array.isArray(existingSummary.transactionsSnapshot)) {
+          // Resumo fechado - não alterar por exclusões
+          return;
+        }
+        
+        if (existingSummary) {
+          // Buscar todas as transações RESTANTES do dia após a exclusão
+          const remainingTransactions = await this.getTransactionsByDateRange(
+            userId,
+            transactionDate,
+            transactionDate
+          );
+          
+          // Se não há mais transações, deletar o resumo diário apenas se não estiver fechado
+          if (remainingTransactions.length === 0) {
+            // Verificar se é um resumo fechado (tem snapshot)
+            if (!existingSummary.transactionsSnapshot || !Array.isArray(existingSummary.transactionsSnapshot) || existingSummary.transactionsSnapshot.length === 0) {
+              await UserDailySummaryService.deleteDailySummary(userId, existingSummary.id);
+            }
+            return;
+          }
+          
+          // Usar função reutilizável para calcular lucro
+          const { calculateProfit, calculateTotalDeposits, calculateTotalWithdraws } = await import('@/utils/financial-calculations');
+          
+          const recalculatedProfit = calculateProfit(remainingTransactions);
+          const totalDeposits = calculateTotalDeposits(remainingTransactions);
+          const totalWithdraws = calculateTotalWithdraws(remainingTransactions);
+          
+          // Atualizar o resumo diário com os valores recalculados
+          // IMPORTANTE: Não alterar transactionsSnapshot se já existe (dia fechado)
+          await UserDailySummaryService.updateDailySummary(userId, existingSummary.id, {
+            totalDeposits: totalDeposits,
+            totalWithdraws: totalWithdraws,
+            profit: recalculatedProfit,
+            margin: recalculatedProfit,
+            transactionCount: remainingTransactions.length,
+            // Não alterar transactionsSnapshot se já existe
+            updatedAt: new Date(),
+          });
+        }
+      } catch (error) {
+        console.error('Erro ao atualizar resumo diário ao excluir transação:', error);
+        // Não falhar a exclusão se a atualização do resumo falhar
+      }
+    }
   }
 }
 

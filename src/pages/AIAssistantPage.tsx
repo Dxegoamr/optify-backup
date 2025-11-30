@@ -43,6 +43,9 @@ export default function AIAssistantPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
+            <Badge className="rounded-full bg-primary/10 px-4 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-primary mb-4">
+              AI Assistant
+            </Badge>
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-3xl font-bold flex items-center gap-3">
                 <Brain className="h-8 w-8 text-primary" />

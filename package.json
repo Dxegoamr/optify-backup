@@ -28,7 +28,6 @@
     "deploy:production": "chmod +x deploy.sh && ./deploy.sh production"
   },
   "dependencies": {
-    "express": "^4.21.2",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-alert-dialog": "^1.1.14",
@@ -65,7 +64,9 @@
     "cmdk": "^1.1.1",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.6.0",
+    "express": "^4.21.2",
     "firebase": "^12.3.0",
+    "framer-motion": "^12.23.24",
     "html2canvas": "^1.4.1",
     "input-otp": "^1.4.2",
     "jspdf": "^3.0.3",

@@ -11,6 +11,7 @@ import { usePlanLimitations } from '@/hooks/usePlanLimitations';
 import { usePlatforms, useTransactions, useCreateTransaction, useDeleteTransaction, useEmployees } from '@/hooks/useFirestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { shouldDisplayAsPositive } from '@/utils/financial-calculations';
 
 interface DayTransactionsModalProps {
   date: Date;
@@ -65,11 +66,7 @@ const DayTransactionsModal = ({ date }: DayTransactionsModalProps) => {
         date: dateStr
       };
 
-      console.log('Creating transaction for date:', dateStr, transactionData);
-      console.log('Transaction data being sent:', JSON.stringify(transactionData, null, 2));
-      
       const result = await createTransaction.mutateAsync(transactionData);
-      console.log('Transaction created successfully with ID:', result);
       
       toast.success(`${type === 'deposit' ? 'Depósito' : 'Saque'} registrado com sucesso!`);
       
@@ -274,14 +271,28 @@ const DayTransactionsModal = ({ date }: DayTransactionsModalProps) => {
               >
                 <div className="flex items-center gap-3">
                   <Badge 
-                    variant={transaction.type === 'deposit' ? 'default' : 'destructive'}
-                    style={{ backgroundColor: getPlatformColor(transaction.platformId) }}
+                    variant={transaction.type === 'withdraw' ? 'default' : 'destructive'}
+                    style={{ 
+                      backgroundColor: transaction.description 
+                        ? (transaction.description.startsWith('Surebet') 
+                            ? '#86efac' // Verde claro para Surebet
+                            : transaction.type === 'withdraw' 
+                              ? '#10b981' 
+                              : '#ef4444')
+                        : getPlatformColor(transaction.platformId) 
+                    }}
                   >
-                    {transaction.type === 'deposit' ? 'Depósito' : 'Saque'}
+                    {transaction.description && transaction.description.startsWith('FreeBet')
+                      ? transaction.description.split(' ')[0]
+                      : transaction.description && transaction.description.startsWith('Surebet')
+                        ? 'Surebet'
+                        : (transaction.type === 'deposit' ? 'Depósito' : 'Saque')}
                   </Badge>
                   
                   <div>
-                    <div className="font-medium">{getPlatformName(transaction.platformId)}</div>
+                    <div className="font-medium">
+                      {transaction.description || getPlatformName(transaction.platformId)}
+                    </div>
                     <div className="text-sm text-muted-foreground">
                       {getEmployeeName(transaction.employeeId) !== 'N/A' && (
                         <span className="block">Funcionário: {getEmployeeName(transaction.employeeId)}</span>
@@ -292,8 +303,8 @@ const DayTransactionsModal = ({ date }: DayTransactionsModalProps) => {
                 </div>
                 
                 <div className="flex items-center gap-2">
-                  <span className={`font-bold ${transaction.type === 'deposit' ? 'text-destructive' : 'text-success'}`}>
-                    {transaction.type === 'deposit' ? '+' : '-'}R$ {Number(transaction.amount).toLocaleString('pt-BR')}
+                  <span className={`font-bold ${shouldDisplayAsPositive(transaction) ? 'text-success' : 'text-destructive'}`}>
+                    {shouldDisplayAsPositive(transaction) ? '+' : '-'}R$ {Number(transaction.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                   
                   <Button
@@ -322,7 +333,7 @@ const DayTransactionsModal = ({ date }: DayTransactionsModalProps) => {
                 R$ {dayTransactions
                   .filter((t: any) => t.type === 'deposit')
                   .reduce((acc: number, t: any) => acc + Number(t.amount), 0)
-                  .toLocaleString('pt-BR')
+                  .toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                 }
               </div>
             </div>
@@ -332,7 +343,7 @@ const DayTransactionsModal = ({ date }: DayTransactionsModalProps) => {
                 R$ {dayTransactions
                   .filter((t: any) => t.type === 'withdraw')
                   .reduce((acc: number, t: any) => acc + Number(t.amount), 0)
-                  .toLocaleString('pt-BR')
+                  .toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                 }
               </div>
             </div>
@@ -347,7 +358,7 @@ const DayTransactionsModal = ({ date }: DayTransactionsModalProps) => {
                   .reduce((acc: number, t: any) => 
                     acc + (t.type === 'withdraw' ? t.amount : -t.amount), 0
                   )
-                  .toLocaleString('pt-BR')
+                  .toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                 }
               </div>
             </div>

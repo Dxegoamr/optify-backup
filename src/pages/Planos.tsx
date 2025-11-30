@@ -245,6 +245,9 @@ const Planos = () => {
       <div className="space-y-8 animate-fade-in">
         <AdBlockerWarning />
         <div className="text-center space-y-4">
+          <Badge className="rounded-full bg-primary/10 px-4 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-primary mb-4 mx-auto">
+            Planos
+          </Badge>
           <h1 className="text-4xl font-bold">Escolha seu Plano</h1>
           <p className="text-muted-foreground text-lg">
             Selecione o plano ideal para o seu negócio

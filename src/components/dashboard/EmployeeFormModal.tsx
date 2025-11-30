@@ -126,7 +126,6 @@ const EmployeeFormModal = () => {
         status: 'active' as const
       };
       
-      console.log('Criando funcionário com dados:', employeeData);
       await createEmployee.mutateAsync(employeeData);
 
       toast.success('Funcionário cadastrado com sucesso!');

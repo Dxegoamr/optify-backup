@@ -7,6 +7,9 @@ export interface UserProfile {
   name?: string;
   displayName?: string;
   photoURL?: string;
+  phone?: string;
+  cpf?: string;
+  cnpj?: string;
   plano: 'free' | 'standard' | 'medium' | 'ultimate';
   funcionariosPermitidos: number;
   permissoes: { [key: string]: any };
@@ -137,6 +140,9 @@ export class UserProfileService {
           name: data.name,
           displayName: data.displayName,
           photoURL: data.photoURL,
+          phone: data.phone,
+          cpf: data.cpf,
+          cnpj: data.cnpj,
           plano: data.plano || 'free',
           funcionariosPermitidos: data.funcionariosPermitidos || 1,
           permissoes: data.permissoes || {},
@@ -154,6 +160,38 @@ export class UserProfileService {
       return null;
     } catch (error) {
       console.error('❌ Erro ao buscar perfil do usuário:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Atualiza informações pessoais do usuário
+   */
+  static async updateUserPersonalInfo(
+    userId: string,
+    personalInfo: {
+      name?: string;
+      displayName?: string;
+      phone?: string;
+      cpf?: string;
+      cnpj?: string;
+    }
+  ): Promise<void> {
+    try {
+      const userRef = doc(db, 'users', userId);
+      const updateData = this.cleanData({
+        ...(personalInfo.name && { name: personalInfo.name }),
+        ...(personalInfo.displayName && { displayName: personalInfo.displayName }),
+        ...(personalInfo.phone && { phone: personalInfo.phone }),
+        ...(personalInfo.cpf && { cpf: personalInfo.cpf }),
+        ...(personalInfo.cnpj && { cnpj: personalInfo.cnpj }),
+        updatedAt: serverTimestamp()
+      });
+
+      await updateDoc(userRef, updateData);
+      console.log(`✅ Informações pessoais do usuário ${userId} atualizadas no Firestore`);
+    } catch (error) {
+      console.error('❌ Erro ao atualizar informações pessoais do usuário:', error);
       throw error;
     }
   }

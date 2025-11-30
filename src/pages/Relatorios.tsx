@@ -6,12 +6,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from 'recharts';
+import { BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine, Cell } from 'recharts';
 import { Download, TrendingUp, TrendingDown, Calendar, FileText, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
 import { useEmployees, useTransactions, usePlatforms, useAllDailySummaries } from '@/hooks/useFirestore';
 import { toast } from 'sonner';
 import { getCurrentDateStringInSaoPaulo, getCurrentDateInSaoPaulo } from '@/utils/timezone';
+import { calculateProfit, isSameDate, shouldDisplayAsPositive } from '@/utils/financial-calculations';
 
 const Relatorios = () => {
   const { user } = useFirebaseAuth();
@@ -89,14 +90,18 @@ const Relatorios = () => {
         return transactionDate === dateString;
       });
       
-      // Calcular receitas (withdraws) e despesas (deposits) do dia
-      const receita = dayTransactions
-        .filter(t => t.type === 'withdraw')
-        .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
-        
-      const despesa = dayTransactions
-        .filter(t => t.type === 'deposit')
-        .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+      // CORREÇÃO: Calcular receitas e despesas tratando Surebet corretamente
+      const surebetTransactions = dayTransactions.filter((t: any) => 
+        t.description && t.description.startsWith('Surebet')
+      );
+      const otherDeposits = dayTransactions.filter((t: any) =>
+        t.type === 'deposit' && (!t.description || !t.description.startsWith('Surebet'))
+      );
+      const withdraws = dayTransactions.filter((t: any) => t.type === 'withdraw');
+      
+      const totalSurebetProfit = surebetTransactions.reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0);
+      const receita = withdraws.reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0) + totalSurebetProfit;
+      const despesa = otherDeposits.reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0);
       
       // Calcular lucro acumulado (começando de 0 e somando conforme os saques)
       const lucroAcumulado = chartData.length > 0 
@@ -150,27 +155,42 @@ const Relatorios = () => {
 
   // Calcular estatísticas do mês atual - CORREÇÃO: Usar mesma lógica do Dashboard
   const monthlyStats = useMemo(() => {
-    // Filtrar fechamentos diários do mês atual
+    const today = getCurrentDateStringInSaoPaulo();
+    
+    // Filtrar fechamentos diários do mês atual (EXCETO o dia atual)
     const monthlySummaries = dailySummaries.filter((summary: any) => {
       const summaryDate = new Date(summary.date);
-      return summaryDate.getFullYear() === selectedYear && summaryDate.getMonth() === selectedMonth - 1;
+      const isCurrentMonth = summaryDate.getFullYear() === selectedYear && summaryDate.getMonth() === selectedMonth - 1;
+      // Excluir resumos do dia atual usando helper isSameDate
+      return isCurrentMonth && !isSameDate(summary.date, today);
     });
     
-    // Somar lucros dos fechamentos diários
+    // Somar lucros dos fechamentos diários (apenas dias passados, não o dia atual)
     const monthlyRevenueFromSummaries = monthlySummaries.reduce((total: number, summary: any) => {
       return total + (summary.profit || summary.margin || 0);
     }, 0);
     
-    // Filtrar apenas transações que NÃO estão em fechamentos diários
+    // Para o dia atual e outros dias não fechados, calcular diretamente das transações
     const closedDates = new Set(monthlySummaries.map((summary: any) => summary.date));
     const openTransactions = monthlyTransactions.filter((transaction: any) => {
-      return !closedDates.has(transaction.date);
+      const transactionDate = transaction.date;
+
+      // Se o dia está fechado E não é hoje, não processar (já está no resumo)
+      if (closedDates.has(transactionDate) && !isSameDate(transactionDate, today)) {
+        return false;
+      }
+
+      // Para o dia atual, sempre incluir todas as transações
+      if (isSameDate(transactionDate, today)) {
+        return true;
+      }
+
+      // Para outros dias não fechados, incluir normalmente
+      return true;
     });
     
-    const monthlyRevenueFromTransactions = openTransactions.reduce((total: number, transaction: any) => {
-      const transactionProfit = transaction.type === 'withdraw' ? transaction.amount : -transaction.amount;
-      return total + transactionProfit;
-    }, 0);
+    // Usar função reutilizável para calcular lucro das transações abertas
+    const monthlyRevenueFromTransactions = calculateProfit(openTransactions);
     
     const profit = monthlyRevenueFromSummaries + monthlyRevenueFromTransactions;
     
@@ -180,16 +200,6 @@ const Relatorios = () => {
     const totalDeposits = deposits.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
     const totalWithdraws = withdraws.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
     
-    console.log('Relatórios - Cálculo Receita Mensal:', {
-      selectedYear,
-      selectedMonth,
-      monthlySummaries: monthlySummaries.length,
-      monthlyRevenueFromSummaries,
-      monthlyTransactions: monthlyTransactions.length,
-      openTransactions: openTransactions.length,
-      monthlyRevenueFromTransactions,
-      profit
-    });
     
     return {
       deposits: totalDeposits,
@@ -249,16 +259,7 @@ const Relatorios = () => {
     // Filtrar fechamentos diários do mês atual
     const monthlySummaries = dailySummaries.filter((summary: any) => {
       const summaryDate = new Date(summary.date);
-      const matches = summaryDate.getFullYear() === selectedYear && summaryDate.getMonth() === selectedMonth - 1;
-      console.log(`Fechamento ${summary.date}:`, {
-        summaryDate: summaryDate.toISOString(),
-        year: summaryDate.getFullYear(),
-        month: summaryDate.getMonth(),
-        selectedYear,
-        selectedMonth: selectedMonth - 1,
-        matches
-      });
-      return matches;
+      return summaryDate.getFullYear() === selectedYear && summaryDate.getMonth() === selectedMonth - 1;
     });
     
     // Criar mapa de fechamentos por data
@@ -296,7 +297,6 @@ const Relatorios = () => {
         dayDeposits = summary.totalDeposits || 0;
         dayWithdraws = summary.totalWithdraws || 0;
         dayTransactions = summary.transactionCount || 0;
-        console.log(`Dia ${day} (${dateString}): Usando fechamento - Profit: ${dayProfit}`);
       } else {
         // Usar transações abertas
         const dayTransactionsOpen = openTransactionsByDate.get(dateString) || [];
@@ -306,9 +306,6 @@ const Relatorios = () => {
         dayWithdraws = withdraws.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
         dayProfit = dayWithdraws - dayDeposits;
         dayTransactions = dayTransactionsOpen.length;
-        if (dayProfit !== 0) {
-          console.log(`Dia ${day} (${dateString}): Usando transações abertas - Profit: ${dayProfit}`);
-        }
       }
       
       dailyStats.push({
@@ -320,27 +317,6 @@ const Relatorios = () => {
         transacoes: dayTransactions
       });
     }
-    
-    console.log('Relatórios - DailyData calculado:', {
-      selectedYear,
-      selectedMonth,
-      monthlySummaries: monthlySummaries.length,
-      monthlyTransactions: monthlyTransactions.length,
-      dailyStats: dailyStats.filter(d => d.lucroPrejuizo !== 0).length
-    });
-    
-    console.log('Relatórios - Fechamentos diários detalhados:', monthlySummaries.map((s: any) => ({
-      date: s.date,
-      profit: s.profit || s.margin || 0,
-      totalDeposits: s.totalDeposits || 0,
-      totalWithdraws: s.totalWithdraws || 0
-    })));
-    
-    console.log('Relatórios - Dias com lucro no gráfico:', dailyStats.filter(d => d.lucroPrejuizo !== 0).map(d => ({
-      day: d.day,
-      date: d.date,
-      lucroPrejuizo: d.lucroPrejuizo
-    })));
     
     return dailyStats;
   }, [monthlyTransactions, dailySummaries, selectedMonth, selectedYear]);
@@ -369,15 +345,27 @@ const Relatorios = () => {
     return segments;
   }, [dailyData]);
 
-  // Calcular performance por plataforma
+  // Calcular performance por plataforma (CORRIGIDO: Tratando Surebet corretamente)
   const platformPerformance = useMemo(() => {
     return platforms.map((platform: any) => {
       const platformTransactions = monthlyTransactions.filter((t: any) => t.platformId === platform.id);
-      const deposits = platformTransactions.filter((t: any) => t.type === 'deposit');
+      
+      // CORREÇÃO: Separar Surebet dos depósitos normais
+      const surebetTransactions = platformTransactions.filter((t: any) => 
+        t.description && t.description.startsWith('Surebet')
+      );
+      const otherDeposits = platformTransactions.filter((t: any) =>
+        t.type === 'deposit' && (!t.description || !t.description.startsWith('Surebet'))
+      );
       const withdraws = platformTransactions.filter((t: any) => t.type === 'withdraw');
-      const totalDeposits = deposits.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+      
+      // Calcular totais corretamente
+      const totalSurebetProfit = surebetTransactions.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+      const totalDeposits = otherDeposits.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
       const totalWithdraws = withdraws.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
-      const profit = totalWithdraws - totalDeposits;
+      
+      // CORREÇÃO: Surebet sempre positivo no lucro
+      const profit = totalWithdraws - totalDeposits + totalSurebetProfit;
       
       return {
         name: platform.name,
@@ -385,30 +373,46 @@ const Relatorios = () => {
         receita: profit,
         depositos: totalDeposits,
         saques: totalWithdraws,
+        surebet: totalSurebetProfit,
         transacoes: platformTransactions.length
       };
-    }).filter(stat => stat.transacoes > 0).sort((a, b) => b.receita - a.receita);
+    }).filter(stat => stat.transacoes > 0 || stat.receita !== 0).sort((a, b) => b.receita - a.receita);
   }, [platforms, monthlyTransactions]);
 
-  // Calcular performance por funcionário
+
+  // Calcular performance por funcionário (CORRIGIDO: Tratando Surebet corretamente)
   const employeePerformance = useMemo(() => {
     return employees.map((employee: any) => {
       const employeeTransactions = monthlyTransactions.filter((t: any) => t.employeeId === employee.id);
-      const deposits = employeeTransactions.filter((t: any) => t.type === 'deposit');
+      
+      // CORREÇÃO: Separar Surebet dos depósitos normais
+      const surebetTransactions = employeeTransactions.filter((t: any) => 
+        t.description && t.description.startsWith('Surebet')
+      );
+      const otherDeposits = employeeTransactions.filter((t: any) =>
+        t.type === 'deposit' && (!t.description || !t.description.startsWith('Surebet'))
+      );
       const withdraws = employeeTransactions.filter((t: any) => t.type === 'withdraw');
-      const totalDeposits = deposits.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+      
+      // Calcular totais corretamente
+      const totalSurebetProfit = surebetTransactions.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+      const totalDeposits = otherDeposits.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
       const totalWithdraws = withdraws.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
-      const profit = totalWithdraws - totalDeposits;
+      
+      // CORREÇÃO: Surebet sempre positivo no lucro
+      const profit = totalWithdraws - totalDeposits + totalSurebetProfit;
       
       return {
         name: employee.name,
         receita: profit,
         depositos: totalDeposits,
         saques: totalWithdraws,
+        surebet: totalSurebetProfit,
         transacoes: employeeTransactions.length
       };
-    }).filter(stat => stat.transacoes > 0).sort((a, b) => b.receita - a.receita);
+    }).filter(stat => stat.transacoes > 0 || stat.receita !== 0).sort((a, b) => b.receita - a.receita);
   }, [employees, monthlyTransactions]);
+
 
   // Calcular variação percentual
   const getVariation = (current: number, previous: number) => {
@@ -1176,11 +1180,17 @@ const Relatorios = () => {
         const date = new Date(transaction.createdAt?.toDate?.() || transaction.createdAt);
         doc.text(date.toLocaleDateString('pt-BR'), margin + 3, yPos + 5);
         
-        // Tipo com cor
-        const typeColor = transaction.type === 'withdraw' ? green : red;
+        // Tipo com cor - usar shouldDisplayAsPositive para determinar cor
+        const isPositive = shouldDisplayAsPositive(transaction);
+        const typeColor = isPositive ? green : red;
         doc.setTextColor(...typeColor);
         doc.setFont('helvetica', 'bold');
-        doc.text(transaction.type === 'withdraw' ? 'Saque' : 'Depósito', margin + 25, yPos + 5);
+        const typeLabel = transaction.description && transaction.description.startsWith('FreeBet')
+          ? 'FreeBet'
+          : transaction.description && transaction.description.startsWith('Surebet')
+            ? 'Surebet'
+            : transaction.type === 'withdraw' ? 'Saque' : 'Depósito';
+        doc.text(typeLabel, margin + 25, yPos + 5);
         
         doc.setTextColor(...darkGray);
         doc.setFont('helvetica', 'normal');
@@ -1190,7 +1200,7 @@ const Relatorios = () => {
         // Valor com cor
         doc.setTextColor(...typeColor);
         doc.setFont('helvetica', 'bold');
-        const valueText = `${transaction.type === 'withdraw' ? '+' : '-'}R$ ${Number(transaction.amount || 0).toLocaleString('pt-BR')}`;
+        const valueText = `${shouldDisplayAsPositive(transaction) ? '+' : '-'}R$ ${Number(transaction.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         doc.text(valueText, margin + 135, yPos + 5, { align: 'right' });
         
         yPos += 8;
@@ -1226,6 +1236,9 @@ const Relatorios = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div>
+              <Badge className="rounded-full bg-primary/10 px-4 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-primary mb-4">
+                Relatórios
+              </Badge>
               <h1 className="text-4xl font-bold mb-2">Relatórios</h1>
               <p className="text-muted-foreground">Análises e insights do seu negócio</p>
             </div>
@@ -1345,7 +1358,7 @@ const Relatorios = () => {
               <div>
                 <p className="text-sm text-muted-foreground mb-2">Receita do Mês</p>
                 <p className={`text-3xl font-bold ${monthlyStats.profit >= 0 ? 'text-success' : 'text-destructive'}`}>
-                  R$ {monthlyStats.profit.toLocaleString('pt-BR')}
+                  R$ {monthlyStats.profit.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
                 {comparisonStats && (
                   <div className={`flex items-center gap-1 text-sm mt-1 ${
@@ -1366,7 +1379,7 @@ const Relatorios = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-2">Total de Depósitos</p>
-                <p className="text-3xl font-bold text-destructive">R$ {monthlyStats.deposits.toLocaleString('pt-BR')}</p>
+                <p className="text-3xl font-bold text-destructive">R$ {monthlyStats.deposits.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
               </div>
               <div className="p-3 bg-gradient-primary rounded-xl shadow-glow">
                 <TrendingUp className="h-6 w-6 text-primary-foreground" />
@@ -1378,7 +1391,7 @@ const Relatorios = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-2">Total de Saques</p>
-                <p className="text-3xl font-bold text-success">R$ {monthlyStats.withdraws.toLocaleString('pt-BR')}</p>
+                <p className="text-3xl font-bold text-success">R$ {monthlyStats.withdraws.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
               </div>
               <div className="p-3 bg-gradient-primary rounded-xl shadow-glow">
                 <TrendingDown className="h-6 w-6 text-primary-foreground" />
@@ -1399,164 +1412,77 @@ const Relatorios = () => {
               </Card>
         </div>
 
-        {/* Gráfico de Linha - Lucro/Prejuízo Diário com Segmentos Coloridos */}
+        {/* Gráfico de Área - Lucro/Prejuízo Diário */}
         <Card className="p-6 shadow-card">
           <h3 className="text-lg font-semibold mb-6">Lucro/Prejuízo Diário - {monthNames[selectedMonth - 1]} {selectedYear}</h3>
           <div className="mb-4 flex items-center gap-4 text-sm">
             <div className="flex items-center gap-2">
               <div className="w-4 h-0.5 bg-green-500"></div>
-              <span>Subida</span>
+              <span>Lucro</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-4 h-0.5 bg-red-500"></div>
-              <span>Queda</span>
+              <span>Prejuízo</span>
             </div>
           </div>
-          <div className="w-full h-96 relative">
-            <svg width="100%" height="100%" className="absolute inset-0">
-              {/* Linha de referência no zero */}
-              <line 
-                x1="0" 
-                y1="50%" 
-                x2="100%" 
-                y2="50%" 
-                stroke="hsl(var(--muted-foreground))" 
-                strokeDasharray="2,2" 
-                strokeWidth="1"
-              />
-              
-              {/* Renderizar segmentos coloridos */}
-              {lineSegments.map((segment, index) => {
-                const startX = (segment.startDay - 1) / (dailyData.length - 1) * 100;
-                const endX = (segment.endDay - 1) / (dailyData.length - 1) * 100;
-                
-                // Escala dinâmica baseada nos valores reais dos dados
-                const allValues = dailyData.map(d => d.lucroPrejuizo);
-                const maxValue = Math.max(...allValues, 0);
-                const minValue = Math.min(...allValues, 0);
-                const maxAbs = Math.max(Math.abs(maxValue), Math.abs(minValue));
-                const scale = maxAbs > 0 ? maxAbs * 1.2 : 1000; // 20% de margem, mínimo 1000
-                
-                // Calcular Y: 0 fica em 50%, valores positivos sobem, negativos descem
-                const startY = segment.startValue >= 0 
-                  ? 50 - (segment.startValue / scale) * 40  // Valores positivos sobem
-                  : 50 + (Math.abs(segment.startValue) / scale) * 40; // Valores negativos descem
-                  
-                const endY = segment.endValue >= 0 
-                  ? 50 - (segment.endValue / scale) * 40
-                  : 50 + (Math.abs(segment.endValue) / scale) * 40;
-                
-                return (
-                  <line
-                    key={index}
-                    x1={`${startX}%`}
-                    y1={`${startY}%`}
-                    x2={`${endX}%`}
-                    y2={`${endY}%`}
-                    stroke={segment.color}
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                  />
-                );
-              })}
-              
-              {/* Pontos nos dados */}
-              {dailyData.map((point, index) => {
-                const x = (point.day - 1) / (dailyData.length - 1) * 100;
-                
-                // Escala dinâmica baseada nos valores reais dos dados
-                const allValues = dailyData.map(d => d.lucroPrejuizo);
-                const maxValue = Math.max(...allValues, 0);
-                const minValue = Math.min(...allValues, 0);
-                const maxAbs = Math.max(Math.abs(maxValue), Math.abs(minValue));
-                const scale = maxAbs > 0 ? maxAbs * 1.2 : 1000; // 20% de margem, mínimo 1000
-                
-                // Calcular Y: 0 fica em 50%, valores positivos sobem, negativos descem
-                const y = point.lucroPrejuizo >= 0 
-                  ? 50 - (point.lucroPrejuizo / scale) * 40  // Valores positivos sobem
-                  : 50 + (Math.abs(point.lucroPrejuizo) / scale) * 40; // Valores negativos descem
-                
-                return (
-                  <circle
-                    key={index}
-                    cx={`${x}%`}
-                    cy={`${y}%`}
-                    r="4"
-                    fill="hsl(var(--foreground))"
-                    stroke="hsl(var(--background))"
-                    strokeWidth="2"
-                  />
-                );
-              })}
-            </svg>
-            
-            {/* Labels do eixo X - Dias */}
-            <div className="absolute bottom-0 left-0 right-0 px-4 pb-2">
-              {dailyData.map((point, index) => {
-                const x = (point.day - 1) / (dailyData.length - 1) * 100;
-                return (
-                  <span 
-                    key={index}
-                    className="absolute text-xs text-muted-foreground"
-                    style={{ 
-                      left: `${x}%`,
-                      transform: 'translateX(-50%)'
-                    }}
-                  >
-                    {point.day}
-                  </span>
-                );
-              })}
-            </div>
-
-            {/* Labels do eixo Y - Dinâmicos */}
-            {(() => {
-              const allValues = dailyData.map(d => d.lucroPrejuizo);
-              const maxValue = Math.max(...allValues, 0);
-              const minValue = Math.min(...allValues, 0);
-              const maxAbs = Math.max(Math.abs(maxValue), Math.abs(minValue));
-              const scale = maxAbs > 0 ? maxAbs * 1.2 : 1000;
-              
-              return (
-                <div className="absolute left-0 top-0 bottom-0 flex flex-col justify-between py-4 pl-2">
-                  <span className="text-xs text-muted-foreground">R$ {scale.toLocaleString('pt-BR')}</span>
-                  <span className="text-xs text-muted-foreground">R$ 0</span>
-                  <span className="text-xs text-muted-foreground">-R$ {scale.toLocaleString('pt-BR')}</span>
-                </div>
-              );
-            })()}
-
-            {/* Valores em cima dos pontos */}
-            <div className="absolute inset-0">
-              {dailyData.map((point, index) => {
-                const x = (point.day - 1) / (dailyData.length - 1) * 100;
-                
-                // Usar a mesma escala dinâmica dos pontos
-                const allValues = dailyData.map(d => d.lucroPrejuizo);
-                const maxValue = Math.max(...allValues, 0);
-                const minValue = Math.min(...allValues, 0);
-                const maxAbs = Math.max(Math.abs(maxValue), Math.abs(minValue));
-                const scale = maxAbs > 0 ? maxAbs * 1.2 : 1000; // 20% de margem, mínimo 1000
-                
-                const y = point.lucroPrejuizo >= 0 
-                  ? 50 - (point.lucroPrejuizo / scale) * 40
-                  : 50 + (Math.abs(point.lucroPrejuizo) / scale) * 40;
-                
-                return (
-                  <div
-                    key={index}
-                    className="absolute text-white text-sm font-medium"
-                    style={{ 
-                      left: `${x}%`,
-                      top: `${y - 8}%`, // 8% acima do ponto
-                      transform: 'translateX(-50%)'
-                    }}
-                  >
-                    R$ {point.lucroPrejuizo.toLocaleString('pt-BR')}
-                  </div>
-                );
-              })}
-            </div>
+          <div className="w-full h-96">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={dailyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="splitColor" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset={0} stopColor="#22c55e" stopOpacity={1} />
+                    <stop offset={1} stopColor="#ef4444" stopOpacity={1} />
+                  </linearGradient>
+                  <linearGradient id="splitColorFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset={0} stopColor="#22c55e" stopOpacity={0.3} />
+                    <stop offset={1} stopColor="#ef4444" stopOpacity={0.3} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} vertical={false} />
+                <XAxis
+                  dataKey="day"
+                  stroke="hsl(var(--muted-foreground))"
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fontSize: 12 }}
+                  dy={10}
+                />
+                <YAxis
+                  stroke="hsl(var(--muted-foreground))"
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fontSize: 12 }}
+                  tickFormatter={(value) => `R$ ${value >= 1000 || value <= -1000 ? (value / 1000).toFixed(1) + 'k' : value}`}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--card)/0.8)',
+                    backdropFilter: 'blur(8px)',
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: '12px',
+                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+                    padding: '12px'
+                  }}
+                  cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeDasharray: '4 4' }}
+                  formatter={(value: any) => [
+                    <span className={value >= 0 ? 'text-success font-bold' : 'text-destructive font-bold'}>
+                      R$ {Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>,
+                    'Lucro/Prejuízo'
+                  ]}
+                />
+                <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" opacity={0.5} />
+                <Area
+                  type="monotone"
+                  dataKey="lucroPrejuizo"
+                  stroke="url(#splitColor)"
+                  fill="url(#splitColorFill)"
+                  strokeWidth={3}
+                  activeDot={{ r: 6, strokeWidth: 0, fill: 'hsl(var(--foreground))' }}
+                  animationDuration={1500}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         </Card>
 
@@ -1565,41 +1491,131 @@ const Relatorios = () => {
           {/* Performance por Plataforma */}
             <Card className="p-6 shadow-card">
             <h3 className="text-lg font-semibold mb-6">Performance por Plataforma</h3>
+            {platformPerformance.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={platformPerformance}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" />
-                  <YAxis stroke="hsl(var(--muted-foreground))" />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'hsl(var(--card))', 
-                    border: '1px solid hsl(var(--border))',
-                    borderRadius: '8px'
-                  }}
+              <BarChart data={platformPerformance} barGap={8} barCategoryGap="20%">
+                <defs>
+                  <linearGradient id="gradPlatform" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#fb923c" stopOpacity={1} />
+                    <stop offset="100%" stopColor="#f97316" stopOpacity={0.6} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.1} vertical={false} />
+                <XAxis 
+                  dataKey="name" 
+                  stroke="hsl(var(--muted-foreground))"
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fontSize: 12 }}
+                  dy={10}
                 />
-                <Bar dataKey="receita" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+                <YAxis 
+                  stroke="hsl(var(--muted-foreground))"
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fontSize: 12 }}
+                  tickFormatter={(value) => `R$ ${value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value}`}
+                />
+                <Tooltip 
+                  cursor={{ fill: 'hsl(var(--muted)/0.2)' }}
+                  contentStyle={{ 
+                    backgroundColor: 'hsl(var(--card)/0.8)',
+                    backdropFilter: 'blur(8px)',
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: '12px',
+                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+                    padding: '12px'
+                  }}
+                  formatter={(value: any) => [
+                    <span className="font-bold">
+                      R$ {Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </span>,
+                    'Receita'
+                  ]}
+                />
+                <Bar 
+                  dataKey="receita" 
+                  fill="url(#gradPlatform)" 
+                  radius={[6, 6, 0, 0]} 
+                  animationDuration={1500}
+                  maxBarSize={60}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[300px]">
+                <div className="text-center text-muted-foreground">
+                  <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium mb-2">Nenhuma transação por plataforma</p>
+                  <p className="text-sm">Os dados aparecerão aqui quando você registrar transações</p>
+                </div>
+              </div>
+            )}
             </Card>
 
           {/* Performance por Funcionário */}
             <Card className="p-6 shadow-card">
             <h3 className="text-lg font-semibold mb-6">Performance por Funcionário</h3>
+            {employeePerformance.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={employeePerformance}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" />
-                <YAxis stroke="hsl(var(--muted-foreground))" />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'hsl(var(--card))', 
-                    border: '1px solid hsl(var(--border))',
-                    borderRadius: '8px'
-                  }}
+              <BarChart data={employeePerformance} barGap={8} barCategoryGap="20%">
+                <defs>
+                  <linearGradient id="gradEmployee" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#4ade80" stopOpacity={1} />
+                    <stop offset="100%" stopColor="#22c55e" stopOpacity={0.6} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.1} vertical={false} />
+                <XAxis 
+                  dataKey="name" 
+                  stroke="hsl(var(--muted-foreground))"
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fontSize: 12 }}
+                  dy={10}
                 />
-                <Bar dataKey="receita" fill="hsl(var(--success))" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+                <YAxis 
+                  stroke="hsl(var(--muted-foreground))"
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fontSize: 12 }}
+                  tickFormatter={(value) => `R$ ${value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value}`}
+                />
+                <Tooltip 
+                  cursor={{ fill: 'hsl(var(--muted)/0.2)' }}
+                  contentStyle={{ 
+                    backgroundColor: 'hsl(var(--card)/0.8)',
+                    backdropFilter: 'blur(8px)',
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: '12px',
+                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+                    padding: '12px'
+                  }}
+                  formatter={(value: any) => [
+                    <span className="font-bold">
+                      R$ {Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </span>,
+                    'Receita'
+                  ]}
+                />
+                <Bar 
+                  dataKey="receita" 
+                  fill="url(#gradEmployee)" 
+                  radius={[6, 6, 0, 0]} 
+                  animationDuration={1500}
+                  maxBarSize={60}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[300px]">
+                <div className="text-center text-muted-foreground">
+                  <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium mb-2">Nenhuma transação por funcionário</p>
+                  <p className="text-sm">Os dados aparecerão aqui quando você registrar transações</p>
+                </div>
+              </div>
+            )}
             </Card>
               </div>
 
@@ -1608,20 +1624,6 @@ const Relatorios = () => {
       <Card className="p-6 shadow-card hover:shadow-glow transition-all duration-300 mt-8" id="weekly-chart-section">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-semibold">Resumo Semanal</h3>
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-success rounded-full"></div>
-              <span>Receitas</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-destructive rounded-full"></div>
-              <span>Despesas</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-primary rounded-full"></div>
-              <span>Lucro Acumulado</span>
-            </div>
-          </div>
         </div>
         {recentTransactionsLoading ? (
           <div className="flex items-center justify-center h-[300px]">
@@ -1630,56 +1632,68 @@ const Relatorios = () => {
               <p className="text-muted-foreground">Carregando dados...</p>
             </div>
           </div>
-        ) : chartData.some(day => day.receita > 0 || day.despesa > 0) ? (
+        ) : chartData.length > 0 && chartData.some(day => day.lucro !== 0) ? (
         <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-            <XAxis 
-              dataKey="name" 
-              stroke="hsl(var(--muted-foreground))" 
-              tick={{ fontSize: 12 }}
+          <BarChart data={chartData} barGap={8} barCategoryGap="20%">
+            <defs>
+              <linearGradient id="gradLucro" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#fb923c" stopOpacity={1} />
+                <stop offset="100%" stopColor="#f97316" stopOpacity={0.6} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.1} vertical={false} />
+            <XAxis
+              dataKey="name"
+              stroke="hsl(var(--muted-foreground))"
+              tickLine={false}
+              axisLine={false}
+              tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+              dy={10}
             />
-            <YAxis 
-              stroke="hsl(var(--muted-foreground))" 
-              tick={{ fontSize: 12 }}
-              tickFormatter={(value) => `R$ ${value.toLocaleString('pt-BR')}`}
+            <YAxis
+              stroke="hsl(var(--muted-foreground))"
+              tickLine={false}
+              axisLine={false}
+              tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+              tickFormatter={(value) => `R$ ${value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value}`}
             />
-            <Tooltip 
-              contentStyle={{ 
-                backgroundColor: 'hsl(var(--card))', 
-                border: '1px solid hsl(var(--border))',
-                borderRadius: '8px',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+            <Tooltip
+              cursor={{ fill: 'hsl(var(--muted)/0.2)' }}
+              contentStyle={{
+                backgroundColor: 'rgba(23, 23, 23, 0.8)',
+                backdropFilter: 'blur(12px)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '16px',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+                padding: '16px'
               }}
-              formatter={(value: any, name: string) => [
-                `R$ ${Number(value).toLocaleString('pt-BR')}`, 
-                name === 'receita' ? 'Receitas' : 
-                name === 'despesa' ? 'Despesas' : 
-                'Lucro Acumulado'
+              itemStyle={{ padding: '4px 0' }}
+              formatter={(value: any) => [
+                <span className={`font-bold font-mono ${Number(value) >= 0 ? 'text-success' : 'text-destructive'}`}>
+                  R$ {Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>,
+                <span className="text-muted-foreground">Lucro do Dia</span>
               ]}
               labelFormatter={(label, payload) => {
                 const data = payload?.[0]?.payload;
-                return data ? `${label} - ${data.date}` : label;
+                return (
+                  <div className="mb-2 pb-2 border-b border-white/10">
+                    <p className="font-semibold text-foreground">{label}</p>
+                    {data && <p className="text-xs text-muted-foreground">{new Date(data.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })}</p>}
+                  </div>
+                );
               }}
             />
             <Bar 
-              dataKey="receita" 
-              fill="hsl(var(--success))" 
-              radius={[4, 4, 0, 0]} 
-              name="receita"
-            />
-            <Bar 
-              dataKey="despesa" 
-              fill="hsl(var(--destructive))" 
-              radius={[4, 4, 0, 0]} 
-              name="despesa"
-            />
-            <Bar 
-              dataKey="lucroAcumulado" 
-              fill="hsl(var(--primary))" 
-              radius={[4, 4, 0, 0]} 
-              name="lucroAcumulado"
-            />
+              dataKey="lucro" 
+              radius={[6, 6, 0, 0]} 
+              animationDuration={1500} 
+              maxBarSize={60}
+            >
+              {chartData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.lucro >= 0 ? '#4ade80' : '#ef4444'} />
+              ))}
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
         ) : (
@@ -1694,27 +1708,13 @@ const Relatorios = () => {
         
         {/* Estatísticas do período */}
         <div className="mt-6 pt-4 border-t border-border">
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div>
-              <p className="text-sm text-muted-foreground mb-1">Total Receitas</p>
-              <p className="text-lg font-semibold text-success">
-                R$ {chartData.reduce((sum, day) => sum + day.receita, 0).toLocaleString('pt-BR')}
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground mb-1">Total Despesas</p>
-              <p className="text-lg font-semibold text-destructive">
-                R$ {chartData.reduce((sum, day) => sum + day.despesa, 0).toLocaleString('pt-BR')}
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground mb-1">Lucro Acumulado</p>
-              <p className={`text-lg font-semibold ${
-                chartData.length > 0 && chartData[chartData.length - 1].lucroAcumulado >= 0 ? 'text-success' : 'text-destructive'
-              }`}>
-                R$ {chartData.length > 0 ? chartData[chartData.length - 1].lucroAcumulado.toLocaleString('pt-BR') : '0'}
-              </p>
-            </div>
+          <div className="text-center">
+            <p className="text-sm text-muted-foreground mb-1">Lucro Semanal</p>
+            <p className={`text-2xl font-semibold ${
+              chartData.reduce((sum, day) => sum + day.lucro, 0) >= 0 ? 'text-success' : 'text-destructive'
+            }`}>
+              R$ {chartData.reduce((sum, day) => sum + day.lucro, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </p>
           </div>
         </div>
       </Card>
@@ -1833,9 +1833,9 @@ const Relatorios = () => {
                     <div key={transaction.id} className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-muted/50 transition-colors">
                       <div className="flex items-center gap-4">
                         <div className={`p-2 rounded-full ${
-                          transaction.type === 'withdraw' ? 'bg-success/10' : 'bg-destructive/10'
+                          shouldDisplayAsPositive(transaction) ? 'bg-success/10' : 'bg-destructive/10'
                         }`}>
-                          {transaction.type === 'withdraw' ? (
+                          {shouldDisplayAsPositive(transaction) ? (
                             <ArrowUpCircle className="h-5 w-5 text-success" />
                           ) : (
                             <ArrowDownCircle className="h-5 w-5 text-destructive" />
@@ -1844,7 +1844,13 @@ const Relatorios = () => {
                         <div>
                           <p className="font-medium">{employee?.name || 'Funcionário não encontrado'}</p>
                           <p className="text-sm text-muted-foreground">
-                            {transaction.type === 'withdraw' ? 'Saque' : 'Depósito'} • {(() => {
+                            {transaction.description && transaction.description.startsWith('FreeBet')
+                              ? 'FreeBet'
+                              : transaction.description && transaction.description.startsWith('Surebet')
+                                ? 'Surebet'
+                                : transaction.type === 'withdraw' 
+                                  ? 'Saque' 
+                                  : 'Depósito'} • {(() => {
                               const platform = platforms.find(p => p.id === transaction.platformId);
                               return platform?.name || 'Plataforma não especificada';
                             })()}
@@ -1853,9 +1859,9 @@ const Relatorios = () => {
                       </div>
                       <div className="text-right">
                         <p className={`font-semibold ${
-                          transaction.type === 'withdraw' ? 'text-success' : 'text-destructive'
+                          shouldDisplayAsPositive(transaction) ? 'text-success' : 'text-destructive'
                         }`}>
-                          {transaction.type === 'withdraw' ? '+' : '-'}R$ {Number(transaction.amount || 0).toLocaleString('pt-BR')}
+                          {shouldDisplayAsPositive(transaction) ? '+' : '-'}R$ {Number(transaction.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {new Date(transaction.createdAt?.toDate?.() || transaction.createdAt).toLocaleDateString('pt-BR', {

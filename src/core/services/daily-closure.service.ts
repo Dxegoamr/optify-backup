@@ -134,15 +134,20 @@ export class DailyClosureService {
   ): Promise<Omit<DailySummary, 'id' | 'userId' | 'createdAt' | 'updatedAt'>> {
     
     // Calcular totais gerais
-    const totalDeposits = transactions
-      .filter(t => t.type === 'deposit')
-      .reduce((sum, t) => sum + (t.amount || 0), 0);
+    // Separar transações Surebet das outras transações
+    const surebetTransactions = transactions.filter((t: any) => 
+      t.description && t.description.startsWith('Surebet')
+    );
+    const otherDeposits = transactions.filter((t: any) => 
+      t.type === 'deposit' && (!t.description || !t.description.startsWith('Surebet'))
+    );
+    const withdraws = transactions.filter((t: any) => t.type === 'withdraw');
 
-    const totalWithdraws = transactions
-      .filter(t => t.type === 'withdraw')
-      .reduce((sum, t) => sum + (t.amount || 0), 0);
+    const totalSurebetProfit = surebetTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);
+    const totalDeposits = otherDeposits.reduce((sum, t) => sum + (t.amount || 0), 0);
+    const totalWithdraws = withdraws.reduce((sum, t) => sum + (t.amount || 0), 0);
 
-    const totalProfit = totalWithdraws - totalDeposits;
+    const totalProfit = totalWithdraws - totalDeposits + totalSurebetProfit;
 
     // Agrupar por funcionário
     const employeeGroups = transactions.reduce((groups, transaction) => {
@@ -158,7 +163,13 @@ export class DailyClosureService {
         };
       }
 
-      if (transaction.type === 'deposit') {
+      // Verificar se é uma transação Surebet (contribui positivamente para o lucro)
+      const isSurebet = transaction.description && transaction.description.startsWith('Surebet');
+      
+      if (isSurebet) {
+        // Surebet contribui positivamente para o lucro, não como depósito
+        groups[employeeId].profit += transaction.amount || 0;
+      } else if (transaction.type === 'deposit') {
         groups[employeeId].deposits += transaction.amount || 0;
       } else {
         groups[employeeId].withdraws += transaction.amount || 0;
@@ -170,7 +181,8 @@ export class DailyClosureService {
 
     // Calcular lucro por funcionário
     Object.values(employeeGroups).forEach(emp => {
-      emp.profit = emp.withdraws - emp.deposits;
+      // O lucro do Surebet já foi adicionado diretamente acima
+      emp.profit = emp.profit + (emp.withdraws - emp.deposits);
     });
 
     const employeeSummaries = Object.values(employeeGroups);

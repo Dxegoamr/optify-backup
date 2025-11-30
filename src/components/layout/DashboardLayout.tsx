@@ -4,6 +4,7 @@ import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
 import { usePlanLimitations } from '@/hooks/usePlanLimitations';
 import { useMobile } from '@/hooks/useMobile';
 import { usePreload } from '@/hooks/usePreload';
+import { useNotificationMonitor } from '@/hooks/useNotificationMonitor';
 import { AIAssistant } from '@/components/ai-assistant/AIAssistant';
 import { isAdminEmail } from '@/core/services/admin.service';
 import { 
@@ -22,7 +23,14 @@ import {
   Clock,
   Crown,
   Menu,
-  X
+  X,
+  Target,
+  Wallet,
+  Calculator,
+  ChevronDown,
+  ChevronRight,
+  BarChart3,
+  Briefcase
 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -49,7 +57,17 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const { canAccess, currentPlan } = usePlanLimitations();
   const { preloadOnHover, preloadOnIdle } = usePreload();
   
+  // Monitorar eventos e disparar notificações automaticamente
+  useNotificationMonitor();
+  
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
+    visaoGeral: true,
+    gestao: true,
+    financeiro: true,
+    ferramentas: true,
+    administracao: true,
+  });
   const isMobile = useMobile();
 
   // Fechar sidebar automaticamente quando mudar para desktop
@@ -91,19 +109,76 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     setSidebarOpen(false);
   };
 
-  // Mostrar TODAS as abas para todos os planos - limitação será na página
-  const navItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', requiredFeature: 'dashboard' },
-    { icon: Users, label: 'Funcionários', path: '/gestao-funcionarios', requiredFeature: 'dashboard' },
-    { icon: DollarSign, label: 'Pagamentos', path: '/pagamentos', requiredFeature: 'payments' },
-    { icon: FileText, label: 'Resumo do Dia', path: '/resumo-dia', requiredFeature: 'dailySummary' },
-    { icon: PieChart, label: 'Saldos', path: '/saldos', requiredFeature: 'balances' },
-    { icon: TrendingUp, label: 'Relatórios', path: '/relatorios', requiredFeature: 'reports' },
-    { icon: Calendar, label: 'Histórico', path: '/historico', requiredFeature: 'history' },
+  // Toggle de grupo expansível
+  const toggleGroup = (groupKey: string) => {
+    setExpandedGroups(prev => ({
+      ...prev,
+      [groupKey]: !prev[groupKey]
+    }));
+  };
+
+  // Estrutura de grupos de menu
+  interface MenuItem {
+    icon: any;
+    label: string;
+    path: string;
+    requiredFeature?: string;
+  }
+
+  interface MenuGroup {
+    key: string;
+    label: string;
+    icon: any;
+    items: MenuItem[];
+  }
+
+  const menuGroups: MenuGroup[] = [
+    {
+      key: 'visaoGeral',
+      label: 'Visão Geral',
+      icon: BarChart3,
+      items: [
+        { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', requiredFeature: 'dashboard' },
+        { icon: FileText, label: 'Resumo do Dia', path: '/resumo-dia', requiredFeature: 'dailySummary' },
+        { icon: TrendingUp, label: 'Relatórios', path: '/relatorios', requiredFeature: 'reports' },
+      ]
+    },
+    {
+      key: 'gestao',
+      label: 'Gestão',
+      icon: Briefcase,
+      items: [
+        { icon: Users, label: 'Funcionários', path: '/gestao-funcionarios', requiredFeature: 'dashboard' },
+        { icon: PieChart, label: 'Saldos', path: '/saldos', requiredFeature: 'balances' },
+      ]
+    },
+    {
+      key: 'financeiro',
+      label: 'Financeiro',
+      icon: DollarSign,
+      items: [
+        { icon: DollarSign, label: 'Pagamentos', path: '/pagamentos', requiredFeature: 'payments' },
+        { icon: Calendar, label: 'Histórico', path: '/historico', requiredFeature: 'history' },
+        ...((isAdmin || isAdminEmail(user?.email)) ? [{ icon: Wallet, label: 'Gestor de Caixa', path: '/gestor-caixa', requiredFeature: 'dashboard' }] : []),
+      ]
+    },
+    {
+      key: 'ferramentas',
+      label: 'Ferramentas de Apostas',
+      icon: Target,
+      items: [
+        { icon: Target, label: 'FreeBet', path: '/freebet', requiredFeature: 'dashboard' },
+        { icon: Calculator, label: 'Calculadora Dutching', path: '/calculadora-dutching', requiredFeature: 'dashboard' },
+        { icon: TrendingUp, label: 'Surebet', path: '/surebet', requiredFeature: 'dashboard' },
+      ]
+    },
+  ];
+
+  // Itens fixos (não em grupos)
+  const fixedItems: MenuItem[] = [
     { icon: Crown, label: 'Planos', path: '/planos', requiredFeature: 'dashboard' },
-    // Afiliados - apenas para administradores (em fase de construção)
     ...((isAdmin || isAdminEmail(user?.email)) ? [{ icon: Gift, label: 'Afiliados', path: '/afiliados', requiredFeature: 'dashboard' }] : []),
-  ]; // Removido o .filter() - todas as abas visíveis
+  ];
 
   // Verificar se o usuário realmente é admin (verificação rigorosa)
   // Só considerar admin se o usuário existir E for realmente admin
@@ -245,39 +320,137 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         </div>
         
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-          {navItems.map((item) => (
-            <button
-              key={item.path}
-              onClick={() => handleNavigate(item.path)}
-              onMouseEnter={() => preloadOnHover(item.path)}
-              className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all group ${
-                isActive(item.path)
-                  ? 'bg-gradient-primary text-primary-foreground shadow-glow scale-105'
-                  : 'hover:bg-sidebar-accent text-muted-foreground hover:text-foreground hover:scale-105'
-              }`}
-            >
-              <item.icon className={`h-5 w-5 ${isActive(item.path) ? '' : 'group-hover:scale-110 transition-transform'}`} />
-              <span className="text-sm font-semibold">{item.label}</span>
-            </button>
-          ))}
+          {/* Grupos de Menu Expansíveis */}
+          {menuGroups.map((group) => {
+            const isExpanded = expandedGroups[group.key];
+            const hasActiveItem = group.items.some(item => isActive(item.path));
+            
+            return (
+              <div key={group.key} className="space-y-1">
+                {/* Cabeçalho do Grupo */}
+                <button
+                  onClick={() => toggleGroup(group.key)}
+                  className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl transition-all group ${
+                    hasActiveItem
+                      ? 'bg-sidebar-accent/50 text-foreground'
+                      : 'hover:bg-sidebar-accent/30 text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <group.icon className="h-4 w-4" />
+                    <span className="text-xs font-bold uppercase tracking-wider">{group.label}</span>
+                  </div>
+                  {isExpanded ? (
+                    <ChevronDown className="h-4 w-4 transition-transform" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 transition-transform" />
+                  )}
+                </button>
+
+                {/* Itens do Grupo */}
+                {isExpanded && (
+                  <div className="ml-4 space-y-1 border-l-2 border-sidebar-border/30 pl-3">
+                    {group.items.map((item) => (
+                      <button
+                        key={item.path}
+                        onClick={() => handleNavigate(item.path)}
+                        onMouseEnter={() => preloadOnHover(item.path)}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all group ${
+                          isActive(item.path)
+                            ? 'bg-gradient-primary text-primary-foreground shadow-glow scale-[1.02]'
+                            : 'hover:bg-sidebar-accent text-muted-foreground hover:text-foreground hover:scale-[1.02]'
+                        }`}
+                      >
+                        <item.icon className={`h-4 w-4 ${isActive(item.path) ? '' : 'group-hover:scale-110 transition-transform'}`} />
+                        <span className="text-sm font-semibold">{item.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Itens Fixos (não em grupos) */}
+          <div className="pt-4 space-y-1 border-t border-sidebar-border/50 mt-4">
+            {fixedItems.map((item) => (
+              <button
+                key={item.path}
+                onClick={() => handleNavigate(item.path)}
+                onMouseEnter={() => preloadOnHover(item.path)}
+                className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all group ${
+                  isActive(item.path)
+                    ? 'bg-gradient-primary text-primary-foreground shadow-glow scale-105'
+                    : 'hover:bg-sidebar-accent text-muted-foreground hover:text-foreground hover:scale-105'
+                }`}
+              >
+                <item.icon className={`h-5 w-5 ${isActive(item.path) ? '' : 'group-hover:scale-110 transition-transform'}`} />
+                <span className="text-sm font-semibold">{item.label}</span>
+              </button>
+            ))}
+          </div>
         </nav>
 
         <div className="p-3 border-t border-sidebar-border/50 space-y-1">
-          {bottomNavItems.map((item) => (
-            <button
-              key={item.path}
-              onClick={() => handleNavigate(item.path)}
-              onMouseEnter={() => preloadOnHover(item.path)}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all ${
-                isActive(item.path)
-                  ? 'bg-gradient-primary text-primary-foreground shadow-glow'
-                  : 'hover:bg-sidebar-accent text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <item.icon className="h-4 w-4" />
-              <span className="text-sm font-semibold">{item.label}</span>
-            </button>
-          ))}
+          {/* Grupo Administração (apenas para admins) */}
+          {userIsAdmin && (
+            <div className="space-y-1 mb-2">
+              <button
+                onClick={() => toggleGroup('administracao')}
+                className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl transition-all group ${
+                  isActive('/admin')
+                    ? 'bg-sidebar-accent/50 text-foreground'
+                    : 'hover:bg-sidebar-accent/30 text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Shield className="h-4 w-4" />
+                  <span className="text-xs font-bold uppercase tracking-wider">Administração</span>
+                </div>
+                {expandedGroups.administracao ? (
+                  <ChevronDown className="h-4 w-4 transition-transform" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 transition-transform" />
+                )}
+              </button>
+
+              {expandedGroups.administracao && (
+                <div className="ml-4 space-y-1 border-l-2 border-sidebar-border/30 pl-3">
+                  <button
+                    onClick={() => handleNavigate('/admin')}
+                    onMouseEnter={() => preloadOnHover('/admin')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all group ${
+                      isActive('/admin')
+                        ? 'bg-gradient-primary text-primary-foreground shadow-glow scale-[1.02]'
+                        : 'hover:bg-sidebar-accent text-muted-foreground hover:text-foreground hover:scale-[1.02]'
+                    }`}
+                  >
+                    <Shield className="h-4 w-4" />
+                    <span className="text-sm font-semibold">Admin</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Configurações (fixo no rodapé) */}
+          <div className="space-y-1">
+            {bottomNavItems.filter(item => item.path !== '/admin').map((item) => (
+              <button
+                key={item.path}
+                onClick={() => handleNavigate(item.path)}
+                onMouseEnter={() => preloadOnHover(item.path)}
+                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all ${
+                  isActive(item.path)
+                    ? 'bg-gradient-primary text-primary-foreground shadow-glow'
+                    : 'hover:bg-sidebar-accent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <item.icon className="h-4 w-4" />
+                <span className="text-sm font-semibold">{item.label}</span>
+              </button>
+            ))}
+          </div>
           
           <AlertDialog>
             <AlertDialogTrigger asChild>

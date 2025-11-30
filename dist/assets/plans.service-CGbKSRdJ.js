@@ -1,0 +1,1 @@
+import{n as t}from"./index-LiAbW-2G.js";import{w as r,y as c,A as e,B as n,x as i}from"./firebase-vendor-BUxvNq0f.js";const m={async listActivePlans(){const a=r(t,"plans"),o=c(a,n("active","==",!0),e("order","asc"));return(await i(o)).docs.map(s=>({id:s.id,...s.data()}))}};export{m as P};

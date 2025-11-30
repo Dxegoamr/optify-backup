@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
-import { Copy, Check, TrendingUp, Users, DollarSign } from 'lucide-react';
+import { Copy, Check, TrendingUp, Users, DollarSign, Gift } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Afiliados = () => {
@@ -38,6 +38,9 @@ const Afiliados = () => {
     <DashboardLayout>
       <div className="space-y-6 animate-fade-in">
         <div>
+          <Badge className="rounded-full bg-primary/10 px-4 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-primary mb-4">
+            Afiliados
+          </Badge>
           <h1 className="text-4xl font-bold mb-2">Sistema de Afiliados</h1>
           <p className="text-muted-foreground">Ganhe comissões indicando novos usuários</p>
         </div>

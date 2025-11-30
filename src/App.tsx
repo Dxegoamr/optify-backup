@@ -44,6 +44,14 @@ const Privacidade = lazy(() => import("./pages/Privacidade"));
 const Suporte = lazy(() => import("./pages/Suporte"));
 const PaymentResult = lazy(() => import("./pages/payment/PaymentResult"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const FreeBet = lazy(() => import("./pages/FreeBet"));
+const DutchingCalculatorPage = lazy(() => import("./pages/DutchingCalculator"));
+const DutchingCalculatorPopup = lazy(() => import("./pages/DutchingCalculatorPopup"));
+const FreeBetOperation = lazy(() => import("./pages/FreeBetOperation"));
+const FreeBetHistory = lazy(() => import("./pages/FreeBetHistory"));
+const GestorCaixa = lazy(() => import("./pages/GestorCaixa"));
+const Surebet = lazy(() => import("./pages/Surebet"));
+const SurebetPlanilha = lazy(() => import("./pages/SurebetPlanilha"));
 
 const queryClient = new QueryClient();
 
@@ -73,6 +81,14 @@ const App = () => (
                 <Route path="/relatorios" element={<ProtectedRoute><PlanLimitationGuard requiredFeature="reports" pageName="Relatórios"><Relatorios /></PlanLimitationGuard></ProtectedRoute>} />
                 <Route path="/historico" element={<ProtectedRoute><PlanLimitationGuard requiredFeature="history" pageName="Histórico"><Historico /></PlanLimitationGuard></ProtectedRoute>} />
                 <Route path="/planos" element={<ProtectedRoute><Planos /></ProtectedRoute>} />
+                <Route path="/freebet" element={<ProtectedRoute><FreeBet /></ProtectedRoute>} />
+                <Route path="/calculadora-dutching" element={<ProtectedRoute><DutchingCalculatorPage /></ProtectedRoute>} />
+                <Route path="/calculadora-dutching/popup" element={<ProtectedRoute><DutchingCalculatorPopup /></ProtectedRoute>} />
+                <Route path="/freebet/historico" element={<ProtectedRoute><FreeBetHistory /></ProtectedRoute>} />
+                <Route path="/freebet/:operationId" element={<ProtectedRoute><FreeBetOperation /></ProtectedRoute>} />
+                <Route path="/surebet" element={<ProtectedRoute><Surebet /></ProtectedRoute>} />
+                <Route path="/surebet/planilha" element={<ProtectedRoute><SurebetPlanilha /></ProtectedRoute>} />
+                <Route path="/gestor-caixa" element={<ProtectedRoute><GestorCaixa /></ProtectedRoute>} />
                 <Route path="/afiliados" element={<ProtectedRoute><Afiliados /></ProtectedRoute>} />
                 <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
                 <Route path="/perfil" element={<ProtectedRoute><Perfil /></ProtectedRoute>} />

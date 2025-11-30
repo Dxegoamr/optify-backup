@@ -1,22 +1,149 @@
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { DataExport } from '@/components/settings/DataExport';
+import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
+import { 
+  getNotificationPreferences, 
+  setNotificationPreferences,
+  type NotificationPreferences 
+} from '@/core/services/notification-preferences.service';
+import { Loader2, Settings as SettingsIcon } from 'lucide-react';
 
 const Settings = () => {
-  const handleSave = () => {
-    toast.success('Configurações salvas com sucesso!');
+  const { user } = useFirebaseAuth();
+  const queryClient = useQueryClient();
+  const [isSaving, setIsSaving] = useState(false);
+  const [preferences, setPreferences] = useState<NotificationPreferences>({
+    email: true,
+    push: true,
+    paymentsPending: true,
+    goal50Percent: true,
+    goal75Percent: true,
+    goal100Percent: true,
+    goalReached: true,
+    newEmployees: false,
+    weeklyReports: true,
+    paymentOverdue: true,
+    lowBalance: false,
+    highActivity: false,
+  });
+
+  // Preferências padrão
+  const defaultPrefs: NotificationPreferences = {
+    email: true,
+    push: true,
+    paymentsPending: true,
+    goal50Percent: true,
+    goal75Percent: true,
+    goal100Percent: true,
+    goalReached: true,
+    newEmployees: false,
+    weeklyReports: true,
+    paymentOverdue: true,
+    lowBalance: false,
+    highActivity: false,
+  };
+
+  // Buscar preferências do usuário
+  const { data: userPreferences, isLoading, error: preferencesError } = useQuery({
+    queryKey: ['notification-preferences', user?.uid],
+    queryFn: async () => {
+      if (!user?.uid) {
+        console.error('⚠️ Usuário não autenticado');
+        return defaultPrefs;
+      }
+      try {
+        console.log('📥 Buscando preferências para usuário:', user.uid);
+        const prefs = await getNotificationPreferences(user.uid);
+        console.log('✅ Preferências carregadas:', prefs);
+        return prefs;
+      } catch (error) {
+        console.error('❌ Erro ao buscar preferências:', error);
+        // Retornar preferências padrão em caso de erro
+        return defaultPrefs;
+      }
+    },
+    enabled: !!user?.uid,
+    retry: 1, // Reduzir tentativas
+    staleTime: Infinity, // Não revalidar automaticamente
+    gcTime: 1000 * 60 * 10, // 10 minutos (antigo cacheTime)
+    refetchOnMount: false, // Não refetch ao montar
+    refetchOnWindowFocus: false, // Não refetch ao focar janela
+    refetchOnReconnect: false, // Não refetch ao reconectar
+  });
+
+  // Atualizar estado quando preferências carregarem (apenas uma vez)
+  useEffect(() => {
+    if (userPreferences) {
+      console.log('🔄 Atualizando estado com preferências:', userPreferences);
+      setPreferences(userPreferences);
+    }
+    // Não fazer nada se não houver preferências - o estado inicial já tem valores padrão
+  }, [userPreferences]); // Remover dependências que podem causar loops
+
+  // Mostrar erro se houver (apenas uma vez)
+  useEffect(() => {
+    if (preferencesError) {
+      console.error('❌ Erro nas preferências:', preferencesError);
+      toast.error('Erro ao carregar preferências. Usando configurações padrão.');
+    }
+  }, [preferencesError]);
+
+  // Mutation para salvar preferências
+  const savePreferencesMutation = useMutation({
+    mutationFn: async (newPreferences: Partial<NotificationPreferences>) => {
+      if (!user?.uid) throw new Error('Usuário não autenticado');
+      return setNotificationPreferences(user.uid, newPreferences);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notification-preferences', user?.uid] });
+      toast.success('Preferências de notificação salvas com sucesso!');
+    },
+    onError: (error) => {
+      console.error('Erro ao salvar preferências:', error);
+      toast.error('Erro ao salvar preferências. Tente novamente.');
+    },
+  });
+
+  const handleSave = async () => {
+    if (!user?.uid) {
+      toast.error('Usuário não autenticado');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await savePreferencesMutation.mutateAsync(preferences);
+    } catch (error) {
+      // Erro já tratado na mutation
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handlePreferenceChange = (key: keyof NotificationPreferences, value: boolean) => {
+    setPreferences(prev => ({
+      ...prev,
+      [key]: value,
+    }));
   };
 
   return (
     <DashboardLayout>
       <div className="space-y-6 animate-fade-in">
         <div>
+          <Badge className="rounded-full bg-primary/10 px-4 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.35em] text-primary mb-4">
+            Configurações
+          </Badge>
           <h1 className="text-4xl font-bold mb-2">Configurações</h1>
           <p className="text-muted-foreground">Personalize suas preferências</p>
         </div>
@@ -82,47 +209,166 @@ const Settings = () => {
             <Card className="p-6 shadow-card">
               <h3 className="text-lg font-semibold mb-6">Notificações</h3>
               
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Notificações de Email</Label>
-                    <p className="text-sm text-muted-foreground">Receba atualizações por email</p>
-                  </div>
-                  <Switch defaultChecked />
+              {isLoading && !userPreferences ? (
+                <div className="flex flex-col items-center justify-center py-8 space-y-4">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  <p className="text-sm text-muted-foreground">Carregando preferências...</p>
                 </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Notificações Gerais */}
+                  <div className="space-y-4">
+                    <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Gerais</h4>
+                    
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label>Notificações de Email</Label>
+                        <p className="text-sm text-muted-foreground">Receba atualizações por email</p>
+                      </div>
+                      <Switch 
+                        checked={preferences.email} 
+                        onCheckedChange={(checked) => handlePreferenceChange('email', checked)}
+                      />
+                    </div>
 
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Pagamentos Pendentes</Label>
-                    <p className="text-sm text-muted-foreground">Alertas sobre pagamentos não realizados</p>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label>Notificações Push</Label>
+                        <p className="text-sm text-muted-foreground">Notificações em tempo real no navegador</p>
+                      </div>
+                      <Switch 
+                        checked={preferences.push} 
+                        onCheckedChange={(checked) => handlePreferenceChange('push', checked)}
+                      />
+                    </div>
                   </div>
-                  <Switch defaultChecked />
-                </div>
 
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Metas Atingidas</Label>
-                    <p className="text-sm text-muted-foreground">Notificação ao atingir metas mensais</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
+                  {/* Metas */}
+                  <div className="space-y-4 pt-4 border-t border-border">
+                    <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Metas Mensais</h4>
+                    
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label>50% da Meta Atingida</Label>
+                        <p className="text-sm text-muted-foreground">Notificação quando atingir 50% da meta mensal</p>
+                      </div>
+                      <Switch 
+                        checked={preferences.goal50Percent} 
+                        onCheckedChange={(checked) => handlePreferenceChange('goal50Percent', checked)}
+                      />
+                    </div>
 
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Novos Funcionários</Label>
-                    <p className="text-sm text-muted-foreground">Alerta quando um novo funcionário é cadastrado</p>
-                  </div>
-                  <Switch />
-                </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label>75% da Meta Atingida</Label>
+                        <p className="text-sm text-muted-foreground">Notificação quando atingir 75% da meta mensal</p>
+                      </div>
+                      <Switch 
+                        checked={preferences.goal75Percent} 
+                        onCheckedChange={(checked) => handlePreferenceChange('goal75Percent', checked)}
+                      />
+                    </div>
 
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Relatórios Semanais</Label>
-                    <p className="text-sm text-muted-foreground">Resumo semanal enviado por email</p>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label>100% da Meta Atingida</Label>
+                        <p className="text-sm text-muted-foreground">Notificação quando atingir 100% da meta mensal</p>
+                      </div>
+                      <Switch 
+                        checked={preferences.goal100Percent} 
+                        onCheckedChange={(checked) => handlePreferenceChange('goal100Percent', checked)}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label>Meta Superada</Label>
+                        <p className="text-sm text-muted-foreground">Notificação quando superar a meta mensal</p>
+                      </div>
+                      <Switch 
+                        checked={preferences.goalReached} 
+                        onCheckedChange={(checked) => handlePreferenceChange('goalReached', checked)}
+                      />
+                    </div>
                   </div>
-                  <Switch defaultChecked />
+
+                  {/* Pagamentos */}
+                  <div className="space-y-4 pt-4 border-t border-border">
+                    <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Pagamentos</h4>
+                    
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label>Pagamentos Pendentes</Label>
+                        <p className="text-sm text-muted-foreground">Alertas sobre pagamentos não realizados</p>
+                      </div>
+                      <Switch 
+                        checked={preferences.paymentsPending} 
+                        onCheckedChange={(checked) => handlePreferenceChange('paymentsPending', checked)}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label>Pagamentos Atrasados</Label>
+                        <p className="text-sm text-muted-foreground">Alertas sobre pagamentos em atraso</p>
+                      </div>
+                      <Switch 
+                        checked={preferences.paymentOverdue} 
+                        onCheckedChange={(checked) => handlePreferenceChange('paymentOverdue', checked)}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Outros */}
+                  <div className="space-y-4 pt-4 border-t border-border">
+                    <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Outros</h4>
+                    
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label>Novos Funcionários</Label>
+                        <p className="text-sm text-muted-foreground">Alerta quando um novo funcionário é cadastrado</p>
+                      </div>
+                      <Switch 
+                        checked={preferences.newEmployees} 
+                        onCheckedChange={(checked) => handlePreferenceChange('newEmployees', checked)}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label>Saldo Baixo</Label>
+                        <p className="text-sm text-muted-foreground">Alerta quando o saldo de uma plataforma estiver baixo</p>
+                      </div>
+                      <Switch 
+                        checked={preferences.lowBalance} 
+                        onCheckedChange={(checked) => handlePreferenceChange('lowBalance', checked)}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label>Alta Atividade</Label>
+                        <p className="text-sm text-muted-foreground">Notificação quando detectar alta atividade de transações</p>
+                      </div>
+                      <Switch 
+                        checked={preferences.highActivity} 
+                        onCheckedChange={(checked) => handlePreferenceChange('highActivity', checked)}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label>Relatórios Semanais</Label>
+                        <p className="text-sm text-muted-foreground">Resumo semanal enviado por email</p>
+                      </div>
+                      <Switch 
+                        checked={preferences.weeklyReports} 
+                        onCheckedChange={(checked) => handlePreferenceChange('weeklyReports', checked)}
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
             </Card>
           </TabsContent>
 
@@ -203,7 +449,16 @@ const Settings = () => {
         </Tabs>
 
         <div className="flex justify-end">
-          <Button onClick={handleSave}>Salvar Alterações</Button>
+          <Button onClick={handleSave} disabled={isSaving || isLoading}>
+            {isSaving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Salvando...
+              </>
+            ) : (
+              'Salvar Alterações'
+            )}
+          </Button>
         </div>
       </div>
     </DashboardLayout>

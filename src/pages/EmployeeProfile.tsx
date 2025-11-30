@@ -15,6 +15,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useFirebaseAuth } from '@/contexts/FirebaseAuthContext';
 import { useEmployees, useUpdateEmployee, useDeleteEmployee, useCreateTransaction, useDeleteTransaction, useUpdateTransaction, useTransactions, usePlatforms } from '@/hooks/useFirestore';
 import { toast } from 'sonner';
+import { shouldDisplayAsPositive } from '@/utils/financial-calculations';
 
 const EmployeeProfile = () => {
   const { id } = useParams();
@@ -562,9 +563,9 @@ const EmployeeProfile = () => {
                         })()}
                       </TableCell>
                       <TableCell>
-                        <span className={transaction.type === 'deposit' ? 'text-destructive' : 'text-success'}>
-                          {transaction.type === 'deposit' ? '-' : '+'}R${' '}
-                          {Number(transaction.amount).toLocaleString('pt-BR')}
+                        <span className={shouldDisplayAsPositive(transaction) ? 'text-success' : 'text-destructive'}>
+                          {shouldDisplayAsPositive(transaction) ? '+' : '-'}R${' '}
+                          {Number(transaction.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </TableCell>
                       <TableCell className="text-right">

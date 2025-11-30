@@ -279,6 +279,9 @@ export * from './stats/aggregations';
 // Export webhook functions (includes mercadoPagoWebhook)
 export * from './webhooks/mercado-pago';
 
+// Export financial global state functions
+export * from './financial/globalFinancialState';
+
 // export const helloWorld = onRequest((request, response) => {
 //   logger.info("Hello logs!", {structuredData: true});
 //   response.send("Hello from Firebase!");
