@@ -322,7 +322,7 @@ async function updateUserPlan(email: string, planId: string, billingType: string
         });
 
         // Tentar buscar sem orderBy primeiro (caso o índice não esteja pronto)
-        let planSelectionsSnap = await db
+        const planSelectionsSnap = await db
           .collection('plan_selections')
           .where('userEmail', '==', userEmailLower)
           .where('selectedPlan', '==', normalizedPlanId)
